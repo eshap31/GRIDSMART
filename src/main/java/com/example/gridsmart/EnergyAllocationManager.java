@@ -2,10 +2,12 @@ package com.example.gridsmart;
 
 import java.util.Map;
 
-// class that makes sure that the EnergyAllocationMap
-// and the reverseAllocationMap stay synchronized
-// all functions, and changes to these data structures
-// will be done through this structure
+ /*
+ class that makes sure that the EnergyAllocationMap
+ and the reverseAllocationMap stay synchronized
+ all functions, and changes to these data structures
+ will be done through this structure
+  */
 public class EnergyAllocationManager {
 
     private final EnergyAllocationMap allocationMap;
