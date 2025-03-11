@@ -2,12 +2,12 @@ package com.example.gridsmart;
 
 public class EnergyConsumer
 {
-    private final int id;
+    private final String id;
     private int priority; // Priority of the consumer
     private double demand; // Energy demand of the consumer in kW
     private double allocatedEnergy; // Energy allocated to the consumer in kW
 
-    public EnergyConsumer(int id, int priority, double demand)
+    public EnergyConsumer(String id, int priority, double demand)
     {
         this.id = id;
         this.priority = priority;
@@ -30,7 +30,7 @@ public class EnergyConsumer
         return this.demand - this.allocatedEnergy;
     }
 
-    public int getId() {
+    public String getId() {
         return id;
     }
 

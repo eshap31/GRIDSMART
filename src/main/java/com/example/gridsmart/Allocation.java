@@ -15,6 +15,7 @@ public class Allocation
     public EnergySource getSource() { return source; }
     public EnergyConsumer getConsumer() { return consumer; }
     public double getAllocatedEnergy() { return allocatedEnergy; }
+    public void setAllocatedEnergy(double allocatedEnergy) { this.allocatedEnergy = allocatedEnergy; }
 
     @Override
     public String toString() {
