@@ -14,9 +14,9 @@ public class ReverseAllocationMap extends HashMap<EnergySource, HashMap<EnergyCo
     }
 
     // add an allocation (tracks consumers depending on a source)
-    public void addAllocation(EnergySource source, EnergyConsumer consumer, double amount) {
+    public void addAllocation(EnergySource source, EnergyConsumer consumer, Allocation allocation) {
         this.computeIfAbsent(source, k -> new HashMap<EnergyConsumer, Allocation>())
-                .put(consumer, new Allocation(source, consumer, amount));
+                .put(consumer, allocation);
     }
 
     // get all consumers that rely on a specific source

@@ -12,9 +12,9 @@ public class EnergyAllocationMap extends HashMap<EnergyConsumer, HashMap<EnergyS
     }
 
     // add an allocation
-    public void addAllocation(EnergyConsumer consumer, EnergySource source, double amount) {
+    public void addAllocation(EnergyConsumer consumer, EnergySource source, Allocation allocation) {
         this.computeIfAbsent(consumer, k -> new HashMap<EnergySource, Allocation>())
-                .put(source, new Allocation(source, consumer, amount));
+                .put(source, allocation);
     }
 
     // get all allocations for a specific consumer
@@ -52,18 +52,7 @@ public class EnergyAllocationMap extends HashMap<EnergyConsumer, HashMap<EnergyS
         Map<EnergySource, Allocation> allocations = this.get(consumer);
         if (allocations != null && allocations.containsKey(source)) {
             Allocation allocation = allocations.get(source);
-
-            double oldAmount = allocation.getAllocatedEnergy();
-            double difference = newAmount - oldAmount;
-
-            // update the allocation amount
             allocation.setAllocatedEnergy(newAmount);
-
-            // update the EnergyConsumer’s allocated energy
-            consumer.setAllocatedEnergy(consumer.getAllocatedEnergy() + difference);
-
-            // update the EnergySource’s current load
-            source.setCurrentLoad(source.getCurrentLoad() + difference);
         }
     }
 
@@ -73,6 +62,6 @@ public class EnergyAllocationMap extends HashMap<EnergyConsumer, HashMap<EnergyS
         double totalAllocated = this.getAllocations(consumer).values().stream()
                 .mapToDouble(Allocation::getAllocatedEnergy)
                 .sum();
-        return totalAllocated >= consumer.getRemainingDemand();
+        return totalAllocated >= consumer.getDemand();
     }
 }

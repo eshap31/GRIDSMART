@@ -5,20 +5,26 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.PriorityQueue;
 
+/*
+save all the energy consumers in a priority queue
+the highest priority consumer will be at the top
+ */
 public class EnergyConsumerQueue extends PriorityQueue<EnergyConsumer>
 {
     // hash map for fast lookups of consumers
     private final Map<String, EnergyConsumer> consumerMap;
 
-    // Comparator for min heap -
-    // the consumer with the lowest priority will be at the top
-    private static final Comparator<EnergyConsumer> priorityComparator =
-            Comparator.comparingInt(EnergyConsumer::getPriority);
+    // comparator for combined sorting
+    // first sort by priority - ascending (lower number is higher priority)
+    // then by remaining demand (demand-allocatedEnergy) descending  (higher demand is higher priority)
+    private static final Comparator<EnergyConsumer> comparator =
+            Comparator.comparingInt(EnergyConsumer::getPriority)
+                    .thenComparingDouble((c) -> -c.getRemainingDemand()); // Negative for descending order
 
     // builder method
     public EnergyConsumerQueue()
     {
-        super(priorityComparator);
+        super(comparator);
         this.consumerMap = new HashMap<>();
     }
 

@@ -61,6 +61,10 @@ public class EnergySource
         this.status = true;
     }
 
+    public SourceType getType() {
+        return type;
+    }
+
     @Override
     public String toString() {
         return "EnergySource{" +
