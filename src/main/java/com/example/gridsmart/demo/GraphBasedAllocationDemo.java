@@ -1,4 +1,14 @@
-package com.example.gridsmart;
+package com.example.gridsmart.demo;
+
+import com.example.gridsmart.graph.Allocation;
+import com.example.gridsmart.graph.EnergyAllocationManager;
+import com.example.gridsmart.graph.Graph;
+import com.example.gridsmart.graph.GraphEdge;
+import com.example.gridsmart.model.EnergyConsumer;
+import com.example.gridsmart.model.EnergySource;
+import com.example.gridsmart.model.SourceType;
+import com.example.gridsmart.util.EnergyConsumerQueue;
+import com.example.gridsmart.util.EnergySourceQueue;
 
 /**
  * Demonstrates how to use the updated graph-based energy allocation system.

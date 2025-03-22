@@ -1,4 +1,4 @@
-package com.example.gridsmart;
+package com.example.gridsmart.ui;
 
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;

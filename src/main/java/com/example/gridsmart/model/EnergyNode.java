@@ -1,4 +1,4 @@
-package com.example.gridsmart;
+package com.example.gridsmart.model;
 
 /*
     Interface that represents a node in the energy grid graph

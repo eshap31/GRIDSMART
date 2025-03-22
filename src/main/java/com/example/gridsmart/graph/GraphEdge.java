@@ -1,4 +1,6 @@
-package com.example.gridsmart;
+package com.example.gridsmart.graph;
+
+import com.example.gridsmart.model.EnergyNode;
 
 /*
  * Represents a directed edge in the energy grid graph, connecting a source node

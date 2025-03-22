@@ -1,4 +1,7 @@
-package com.example.gridsmart;
+package com.example.gridsmart.graph;
+
+import com.example.gridsmart.model.EnergyConsumer;
+import com.example.gridsmart.model.EnergySource;
 
 /*
  * Represents an allocation of energy from a source to a consumer.

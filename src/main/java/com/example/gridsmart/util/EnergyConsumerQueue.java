@@ -1,4 +1,9 @@
-package com.example.gridsmart;
+package com.example.gridsmart.util;
+
+import com.example.gridsmart.graph.Graph;
+import com.example.gridsmart.model.EnergyConsumer;
+import com.example.gridsmart.model.EnergyNode;
+import com.example.gridsmart.model.NodeType;
 
 import java.util.Comparator;
 import java.util.HashMap;

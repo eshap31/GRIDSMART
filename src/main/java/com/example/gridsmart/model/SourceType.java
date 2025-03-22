@@ -1,4 +1,4 @@
-package com.example.gridsmart;
+package com.example.gridsmart.model;
 
 /*
     * Enum for the type of energy source

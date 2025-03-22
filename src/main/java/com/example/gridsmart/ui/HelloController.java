@@ -1,4 +1,4 @@
-package com.example.gridsmart;
+package com.example.gridsmart.ui;
 
 import javafx.fxml.FXML;
 import javafx.scene.control.Label;

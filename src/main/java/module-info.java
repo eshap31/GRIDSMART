@@ -11,6 +11,14 @@ module com.example.gridsmart {
     requires eu.hansolo.tilesfx;
     requires com.almasb.fxgl.all;
 
-    opens com.example.gridsmart to javafx.fxml;
-    exports com.example.gridsmart;
+    exports com.example.gridsmart.ui;
+    opens com.example.gridsmart.ui to javafx.fxml;
+    exports com.example.gridsmart.model;
+    opens com.example.gridsmart.model to javafx.fxml;
+    exports com.example.gridsmart.graph;
+    opens com.example.gridsmart.graph to javafx.fxml;
+    exports com.example.gridsmart.util;
+    opens com.example.gridsmart.util to javafx.fxml;
+    exports com.example.gridsmart.demo;
+    opens com.example.gridsmart.demo to javafx.fxml;
 }

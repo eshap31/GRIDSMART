@@ -1,4 +1,6 @@
-package com.example.gridsmart;
+package com.example.gridsmart.model;
+
+import com.example.gridsmart.graph.GraphEdge;
 
 import java.util.ArrayList;
 import java.util.List;
