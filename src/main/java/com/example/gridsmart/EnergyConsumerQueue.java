@@ -6,42 +6,43 @@ import java.util.Map;
 import java.util.PriorityQueue;
 
 /*
-save all the energy consumers in a priority queue
-the highest priority consumer will be at the top
+ * A priority queue for energy consumers, with the highest priority consumer
+ * at the top of the queue. Updated to work with the graph-based model.
  */
-public class EnergyConsumerQueue extends PriorityQueue<EnergyConsumer>
-{
-    // hash map for fast lookups of consumers
+public class EnergyConsumerQueue extends PriorityQueue<EnergyConsumer> {
+
+    // HashMap for fast lookups of consumers
     private final Map<String, EnergyConsumer> consumerMap;
 
-    // comparator for combined sorting
-    // first sort by priority - ascending (lower number is higher priority)
-    // then by remaining demand (demand-allocatedEnergy) descending  (higher demand is higher priority)
+    // Comparator for combined sorting:
+    // 1. Sort by priority - ascending (lower number is higher priority)
+    // 2. Then by remaining demand (demand-allocatedEnergy) descending (higher demand is higher priority)
     private static final Comparator<EnergyConsumer> comparator =
             Comparator.comparingInt(EnergyConsumer::getPriority)
                     .thenComparingDouble((c) -> -c.getRemainingDemand()); // Negative for descending order
 
-    // builder method
-    public EnergyConsumerQueue()
-    {
+    /*
+     * Creates a new empty consumer queue
+     */
+    public EnergyConsumerQueue() {
         super(comparator);
         this.consumerMap = new HashMap<>();
     }
 
-//_____________________________________________________________________________________________________________________
-    // override functions to optimize heap operations
-    // usage of hashmap to optimize remove and update operations
-
-    // Override add() to insert into both PriorityQueue & HashMap
+    /*
+     * Overrides add() to insert into both PriorityQueue & HashMap
+     */
     @Override
     public boolean add(EnergyConsumer consumer) {
         // Store in HashMap
         consumerMap.put(consumer.getId(), consumer);
-        // add to PriorityQueue
+        // Add to PriorityQueue
         return super.add(consumer);
     }
 
-    // optimized remove() - log n
+    /*
+     * Optimized remove() - O(log n) instead of O(n)
+     */
     @Override
     public boolean remove(Object obj) {
         if (obj instanceof EnergyConsumer) {
@@ -56,26 +57,27 @@ public class EnergyConsumerQueue extends PriorityQueue<EnergyConsumer>
         return false;
     }
 
-//_____________________________________________________________________________________________________________________
-
-    // Optimized updateConsumer - log n instead of O(n)
+    /*
+     * Optimized updateConsumer - O(log n) instead of O(n)
+     */
     public void updateConsumer(String consumerId, double newAllocatedEnergy) {
         // O(1) lookup
         EnergyConsumer consumer = consumerMap.get(consumerId);
         if (consumer != null) {
-            // log n removal from heap
+            // O(log n) removal from heap
             super.remove(consumer);
-            // update allocated energy
+            // Update allocated energy
             consumer.setAllocatedEnergy(newAllocatedEnergy);
-            // log n reinsertion into heap
+            // O(log n) reinsertion into heap
             super.add(consumer);
         }
     }
 
-    // retrieve and remove the highest-priority consumer
-    public EnergyConsumer pollHighestPriorityConsumer()
-    {
-        // log n
+    /*
+     * Retrieves and removes the highest-priority consumer
+     */
+    public EnergyConsumer pollHighestPriorityConsumer() {
+        // O(log n)
         EnergyConsumer highest = super.poll();
         if (highest != null) {
             // Keep HashMap in sync
@@ -84,17 +86,59 @@ public class EnergyConsumerQueue extends PriorityQueue<EnergyConsumer>
         return highest;
     }
 
-    // Retrieve but do not remove the highest-priority consumer
-    public EnergyConsumer peekHighestPriorityConsumer()
-    {
+    /*
+     * Retrieves but does not remove the highest-priority consumer
+     */
+    public EnergyConsumer peekHighestPriorityConsumer() {
         // O(1)
         return super.peek();
     }
 
-    // Clear all data
+    /*
+     * Clears all data
+     */
     @Override
     public void clear() {
         super.clear();
         consumerMap.clear();
+    }
+
+    /*
+     * Updates the queue from the graph
+     */
+    public void updateFromGraph(Graph graph) {
+        // Create a new queue to rebuild
+        EnergyConsumerQueue newQueue = new EnergyConsumerQueue();
+
+        // Get all consumer nodes from the graph
+        for (EnergyNode node : graph.getNodesByType(NodeType.CONSUMER)) {
+            if (node instanceof EnergyConsumer) {
+                EnergyConsumer consumer = (EnergyConsumer) node;
+                newQueue.add(consumer);
+            }
+        }
+
+        // Clear this queue
+        this.clear();
+
+        // Add all from the new queue
+        this.addAll(newQueue);
+    }
+
+    /*
+     * Creates a queue from nodes in a graph
+     */
+    public static EnergyConsumerQueue fromGraph(Graph graph) {
+        EnergyConsumerQueue queue = new EnergyConsumerQueue();
+
+        // Get all consumer nodes from the graph
+        for (EnergyNode node : graph.getNodesByType(NodeType.CONSUMER)) {
+            if (node instanceof EnergyConsumer) {
+                EnergyConsumer consumer = (EnergyConsumer) node;
+                queue.add(consumer);
+            }
+        }
+
+        return queue;
     }
 }

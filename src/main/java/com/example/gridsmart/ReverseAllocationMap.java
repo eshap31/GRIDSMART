@@ -4,40 +4,52 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-// HashMap<EnergySource, HashMap<EnergyConsumer, Allocation>>
-// stores for each energy sorce, all the consumers that depend on it
-public class ReverseAllocationMap extends HashMap<EnergySource, HashMap<EnergyConsumer, Allocation>>
-{
-    // builder
+/*
+ * A specialized HashMap that maps sources to their consumer allocations.
+ * Updated to work with the graph-based model by storing edge references.
+ */
+public class ReverseAllocationMap extends HashMap<EnergySource, HashMap<EnergyConsumer, Allocation>> {
+
+    /*
+     * Creates a new empty reverse allocation map
+     */
     public ReverseAllocationMap() {
         super();
     }
 
-    // add an allocation (tracks consumers depending on a source)
+    /*
+     * Adds an allocation to the map (tracks consumers depending on a source)
+     */
     public void addAllocation(EnergySource source, EnergyConsumer consumer, Allocation allocation) {
         this.computeIfAbsent(source, k -> new HashMap<EnergyConsumer, Allocation>())
                 .put(consumer, allocation);
     }
 
-    // get all consumers that rely on a specific source
+    /*
+     * Gets all consumers that rely on a specific source
+     */
     public Map<EnergyConsumer, Allocation> getAllocations(EnergySource source) {
-        // Use containsKey check to avoid type issues with Collections.emptyMap()
         return this.containsKey(source) ? this.get(source) : Collections.<EnergyConsumer, Allocation>emptyMap();
     }
 
-    // retrieve a specific consumer's allocation from a source
+    /*
+     * Retrieves a specific consumer's allocation from a source
+     */
     public Allocation getAllocation(EnergySource source, EnergyConsumer consumer) {
-        // Handle null case explicitly
         Map<EnergyConsumer, Allocation> consumerMap = this.get(source);
         return (consumerMap != null) ? consumerMap.get(consumer) : null;
     }
 
-    // remove all allocations for a given source
+    /*
+     * Removes all allocations for a given source
+     */
     public void removeAllocations(EnergySource source) {
         this.remove(source);
     }
 
-    // remove a specific consumer's allocation from a source
+    /*
+     * Removes a specific consumer's allocation from a source
+     */
     public void removeAllocation(EnergySource source, EnergyConsumer consumer) {
         Map<EnergyConsumer, Allocation> allocations = this.get(source);
         if (allocations != null) {
@@ -48,11 +60,62 @@ public class ReverseAllocationMap extends HashMap<EnergySource, HashMap<EnergyCo
         }
     }
 
-    // update an existing allocation amount in O(1)
+    /*
+     * Updates an existing allocation amount in O(1)
+     */
     public void updateAllocation(EnergySource source, EnergyConsumer consumer, double newAmount) {
         Map<EnergyConsumer, Allocation> allocations = this.get(source);
         if (allocations != null && allocations.containsKey(consumer)) {
             allocations.get(consumer).setAllocatedEnergy(newAmount);
+        }
+    }
+
+    /*
+     * Synchronizes all allocations with the corresponding graph edges
+     */
+    public void synchronizeWithGraph(Graph graph) {
+        for (EnergySource source : keySet()) {
+            Map<EnergyConsumer, Allocation> consumerAllocations = get(source);
+
+            for (Map.Entry<EnergyConsumer, Allocation> entry : consumerAllocations.entrySet()) {
+                EnergyConsumer consumer = entry.getKey();
+                Allocation allocation = entry.getValue();
+
+                // Get or create the edge in the graph
+                GraphEdge edge = graph.getEdge(source.getId(), consumer.getId());
+                if (edge == null && allocation.getAllocatedEnergy() > 0) {
+                    edge = graph.addEdge(source.getId(), consumer.getId(), source.getCapacity());
+                }
+
+                if (edge != null) {
+                    // Update edge flow to match allocation
+                    edge.setFlow(allocation.getAllocatedEnergy());
+
+                    // Update allocation with edge reference
+                    allocation.setEdge(edge);
+                }
+            }
+        }
+    }
+
+    /*
+     * Updates allocation values from the graph edges
+     */
+    public void updateFromGraph(Graph graph) {
+        for (EnergySource source : keySet()) {
+            Map<EnergyConsumer, Allocation> consumerAllocations = get(source);
+
+            for (Map.Entry<EnergyConsumer, Allocation> entry : consumerAllocations.entrySet()) {
+                EnergyConsumer consumer = entry.getKey();
+                Allocation allocation = entry.getValue();
+
+                // Get the edge from the graph
+                GraphEdge edge = graph.getEdge(source.getId(), consumer.getId());
+                if (edge != null) {
+                    // Update allocation with edge flow
+                    allocation.setAllocatedEnergy(edge.getFlow());
+                }
+            }
         }
     }
 }

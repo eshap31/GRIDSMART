@@ -5,38 +5,41 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.PriorityQueue;
 
-public class EnergySourceQueue extends PriorityQueue<EnergySource>
-{
-    // hash map for fast lookups of sources
+/*
+ * A priority queue for energy sources, with the source having the highest
+ * available energy at the top. Updated to work with the graph-based model.
+ */
+public class EnergySourceQueue extends PriorityQueue<EnergySource> {
+
+    // HashMap for fast lookups of sources
     private final Map<String, EnergySource> sourceMap;
 
     // Comparator for max heap - the source with the
-    // source with the highest available energy will be at the top
+    // highest available energy will be at the top
     private static final Comparator<EnergySource> energyComparator =
             Comparator.comparingDouble(EnergySource::getAvailableEnergy).reversed(); // .reversed() for max heap
 
-    // builder method
-    public EnergySourceQueue()
-    {
-        // initialize the priority queue with the custom comparator
+    /*
+     * Creates a new empty source queue
+     */
+    public EnergySourceQueue() {
+        // Initialize the priority queue with the custom comparator
         super(energyComparator);
-        this.sourceMap=new HashMap<>();
+        this.sourceMap = new HashMap<>();
     }
 
-//_____________________________________________________________________________________________________________________
-    // override functions to optimize heap operations
-    // usage of hashmap to optimize remove and update operations
-
-
-    // Override add() to insert into both PriorityQueue & HashMap
+    /*
+     * Overrides add() to insert into both PriorityQueue & HashMap
+     */
     @Override
-    public boolean add(EnergySource source)
-    {
-        sourceMap.put(source.getId(), source);  // store in HashMap
-        return super.add(source);  // add to PriorityQueue
+    public boolean add(EnergySource source) {
+        sourceMap.put(source.getId(), source);  // Store in HashMap
+        return super.add(source);  // Add to PriorityQueue
     }
 
-    // Optimized remove() - O(log n) instead of O(n)
+    /*
+     * Optimized remove() - O(log n) instead of O(n)
+     */
     @Override
     public boolean remove(Object obj) {
         if (obj instanceof EnergySource) {
@@ -49,51 +52,90 @@ public class EnergySourceQueue extends PriorityQueue<EnergySource>
         return false;
     }
 
-// _____________________________________________________________________________________________________________________
-    // heap functions
-
-    // retrieve and remove the highest-energy source
-    public EnergySource pollHighestEnergySource()
-    {
-        // remove from max queue (log n)
+    /*
+     * Retrieves and removes the highest-energy source
+     */
+    public EnergySource pollHighestEnergySource() {
+        // Remove from max queue (O(log n))
         EnergySource highest = super.poll();
-        if (highest != null)
-        {
-            // keep hashmap in sync
+        if (highest != null) {
+            // Keep HashMap in sync
             sourceMap.remove(highest.getId());
         }
         return highest;
     }
 
-    // retrieve but do not remove the highest-energy source
-    public EnergySource peekHighestEnergySource()
-    {
+    /*
+     * Retrieves but does not remove the highest-energy source
+     */
+    public EnergySource peekHighestEnergySource() {
         // O(1)
         return super.peek();
     }
 
-    // update a source's energy availability
-    // and then reinsert to maintain heap order
-    public void updateSource(String sourceId, double newAvailableEnergy)
-    {
-        // log(n) lookup in hashmap
+    /*
+     * Updates a source's energy availability
+     * and then reinserts to maintain heap order
+     */
+    public void updateSource(String sourceId, double newAvailableEnergy) {
+        // O(1) lookup in HashMap
         EnergySource source = sourceMap.get(sourceId);
 
         if (source != null) {
-            // log(n) removal from heap
+            // O(log n) removal from heap
             super.remove(source);
-            // update energy value
+            // Update energy value
             source.setAvailableEnergy(newAvailableEnergy);
-            // log(n) insertion into heap
+            // O(log n) insertion into heap
             super.add(source);
         }
     }
 
-    // Clear all data
+    /*
+     * Clears all data
+     */
     @Override
     public void clear() {
         super.clear();
         sourceMap.clear();
     }
 
+    /*
+     * Updates the queue from the graph
+     */
+    public void updateFromGraph(Graph graph) {
+        // Create a new queue to rebuild
+        EnergySourceQueue newQueue = new EnergySourceQueue();
+
+        // Get all source nodes from the graph
+        for (EnergyNode node : graph.getNodesByType(NodeType.SOURCE)) {
+            if (node instanceof EnergySource) {
+                EnergySource source = (EnergySource) node;
+                newQueue.add(source);
+            }
+        }
+
+        // Clear this queue
+        this.clear();
+
+        // Add all from the new queue
+        this.addAll(newQueue);
+    }
+
+    /*
+     * Creates a queue from nodes in a graph
+     */
+    public static EnergySourceQueue fromGraph(Graph graph) {
+        EnergySourceQueue queue = new EnergySourceQueue();
+
+        // Get all source nodes from the graph
+        for (EnergyNode node : graph.getNodesByType(NodeType.SOURCE)) {
+            if (node instanceof EnergySource) {
+                EnergySource source = (EnergySource) node;
+                queue.add(source);
+            }
+        }
+
+        return queue;
+    }
 }
