@@ -6,6 +6,7 @@ import com.example.gridsmart.model.EnergySource;
 import com.example.gridsmart.model.NodeType;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /*
@@ -16,7 +17,7 @@ public class EnergyAllocationManager {
 
     private final EnergyAllocationMap allocationMap;
     private final ReverseAllocationMap reverseAllocationMap;
-    private final Graph graph;
+    private Graph graph;
 
     /*
      * Creates a new allocation manager with empty maps and graph
@@ -324,5 +325,123 @@ public class EnergyAllocationManager {
                 newEdge.setFlow(edge.getFlow());
             }
         }
+    }
+
+    /**
+     * Updates the allocation maps based on the flow values in the graph.
+     * For each edge with flow > 0, creates or updates allocations accordingly.
+     *
+     * @return The total energy allocated
+     */
+    public double updateFromFlow() {
+        // Clear existing allocations
+        for (EnergyConsumer consumer : getAllConsumers().values()) {
+            removeAllocationsForConsumer(consumer);
+        }
+
+        double totalAllocated = 0;
+
+        // Process all nodes in the graph
+        for (EnergyNode node : graph.getAllNodes()) {
+            // We only care about source nodes
+            if (node.getNodeType() == NodeType.SOURCE && node instanceof EnergySource) {
+                EnergySource source = (EnergySource) node;
+
+                // Check all outgoing edges from this source
+                for (GraphEdge edge : graph.getOutgoingEdges(source.getId())) {
+                    // Only process edges to consumer nodes with positive flow
+                    EnergyNode targetNode = edge.getTarget();
+                    if (targetNode.getNodeType() == NodeType.CONSUMER &&
+                            targetNode instanceof EnergyConsumer &&
+                            edge.getFlow() > 0) {
+
+                        EnergyConsumer consumer = (EnergyConsumer) targetNode;
+                        double flowAmount = edge.getFlow();
+
+                        // Create or update allocation
+                        Allocation allocation = getAllocation(consumer, source);
+
+                        if (allocation == null) {
+                            // Create new allocation
+                            addAllocation(consumer, source, flowAmount);
+                        } else {
+                            // Update existing allocation
+                            updateAllocation(consumer, source, flowAmount);
+                        }
+
+                        totalAllocated += flowAmount;
+                    }
+                }
+            }
+        }
+
+        return totalAllocated;
+    }
+
+    /**
+     * Updates the allocation system from a graph after a flow algorithm has been run.
+     * This is particularly useful after running maximum flow algorithms.
+     *
+     * @param graph The graph with updated flow values
+     * @return The total energy allocated
+     */
+    public double updateFromFlowGraph(Graph graph) {
+        // Set this graph as our current graph
+        this.graph = graph;
+
+        // Update allocations based on flow
+        return updateFromFlow();
+    }
+
+    /**
+     * Applies the results of a global allocation algorithm to the allocation system.
+     *
+     * @param algorithm The algorithm that has been run
+     * @param graph The graph with flow results
+     * @param consumers The list of consumers
+     * @param sources The list of energy sources
+     * @return The total energy allocated
+     */
+    public double applyGlobalAllocation(GlobalAllocationAlgorithm algorithm,
+                                        Graph graph,
+                                        List<EnergyConsumer> consumers,
+                                        List<EnergySource> sources) {
+        // Create a copy of the graph without super nodes
+        Graph flowGraph = new Graph();
+
+        // Copy all regular nodes
+        for (EnergyNode node : graph.getAllNodes()) {
+            if (node.getNodeType() != NodeType.SUPER_SOURCE &&
+                    node.getNodeType() != NodeType.SUPER_SINK) {
+                flowGraph.addNode(node);
+            }
+        }
+
+        // Copy all edges between regular nodes with their flow values
+        for (EnergyNode node : graph.getAllNodes()) {
+            if (node.getNodeType() != NodeType.SUPER_SOURCE &&
+                    node.getNodeType() != NodeType.SUPER_SINK) {
+
+                for (GraphEdge edge : graph.getOutgoingEdges(node.getId())) {
+                    EnergyNode target = edge.getTarget();
+
+                    if (target.getNodeType() != NodeType.SUPER_SOURCE &&
+                            target.getNodeType() != NodeType.SUPER_SINK) {
+
+                        GraphEdge newEdge = flowGraph.addEdge(
+                                node.getId(),
+                                target.getId(),
+                                edge.getCapacity(),
+                                edge.getWeight()
+                        );
+
+                        newEdge.setFlow(edge.getFlow());
+                    }
+                }
+            }
+        }
+
+        // Update allocations from the flow graph
+        return updateFromFlowGraph(flowGraph);
     }
 }

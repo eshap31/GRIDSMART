@@ -205,14 +205,37 @@ public class Graph {
             for (GraphEdge edge : outgoingEdges.get(sourceId)) {
                 String targetId = edge.getTarget().getId();
 
-                // Forward edge with residual capacity
-                if (edge.getResidualCapacity() > 0) {
-                    residualGraph.addEdge(sourceId, targetId, edge.getResidualCapacity(), edge.getWeight());
+                // Forward edge with residual capacity (if there's remaining capacity)
+                double residualCapacity = edge.getResidualCapacity();
+                if (residualCapacity > 0) {
+                    GraphEdge forwardResidualEdge = residualGraph.addEdge(
+                            sourceId,
+                            targetId,
+                            residualCapacity,
+                            edge.getWeight()
+                    );
+                    // Mark that this is a forward edge (not reverse)
+                    forwardResidualEdge.setReverse(false);
                 }
 
-                // Backward edge with flow as capacity
-                if (edge.getFlow() > 0) {
-                    residualGraph.addEdge(targetId, sourceId, edge.getFlow(), -edge.getWeight());
+                // Reverse edge with flow as capacity (if there's existing flow to cancel)
+                double flow = edge.getFlow();
+                if (flow > 0) {
+                    GraphEdge reverseResidualEdge = residualGraph.addEdge(
+                            targetId,
+                            sourceId,
+                            flow,
+                            -edge.getWeight()
+                    );
+                    // Mark that this is a reverse edge
+                    reverseResidualEdge.setReverse(true);
+
+                    // Set up the relationship between forward and reverse edges if both exist
+                    GraphEdge forwardEdge = residualGraph.getEdge(sourceId, targetId);
+                    if (forwardEdge != null) {
+                        forwardEdge.setReverseEdge(reverseResidualEdge);
+                        reverseResidualEdge.setReverseEdge(forwardEdge);
+                    }
                 }
             }
         }
@@ -411,5 +434,64 @@ public class Graph {
         flowNetwork.addSuperNodes("super_source", "super_sink");
 
         return flowNetwork;
+    }
+
+
+    /**
+     * Finds an augmenting path from superSource to superSink using Breadth-First Search.
+     * Only considers edges with residual capacity > 0.
+     *
+     * @param superSource The super source node
+     * @param superSink The super sink node
+     * @param parentEdges Map to store the parent edge of each node (for path reconstruction)
+     * @return true if an augmenting path exists, false otherwise
+     */
+    public boolean BFS(EnergyNode superSource, EnergyNode superSink,
+                       Map<String, GraphEdge> parentEdges) {
+        // Clear the parent edges map
+        parentEdges.clear();
+
+        // Set to keep track of visited nodes
+        Set<String> visited = new HashSet<>();
+
+        // Queue for BFS traversal
+        Queue<EnergyNode> queue = new LinkedList<>();
+
+        // Start from superSource
+        queue.add(superSource);
+        visited.add(superSource.getId());
+
+        // BFS traversal
+        while (!queue.isEmpty()) {
+            EnergyNode current = queue.poll();
+
+            // Get all outgoing edges from the current node
+            List<GraphEdge> edges = getOutgoingEdges(current.getId());
+
+            for (GraphEdge edge : edges) {
+                EnergyNode target = edge.getTarget();
+                String targetId = target.getId();
+
+                // Skip if already visited or no residual capacity
+                if (visited.contains(targetId) || edge.getResidualCapacity() <= 0) {
+                    continue;
+                }
+
+                // Store the parent edge for this node
+                parentEdges.put(targetId, edge);
+
+                // If we've reached the superSink, we found a path
+                if (targetId.equals(superSink.getId())) {
+                    return true;
+                }
+
+                // Mark as visited and add to queue
+                visited.add(targetId);
+                queue.add(target);
+            }
+        }
+
+        // No augmenting path found
+        return false;
     }
 }
