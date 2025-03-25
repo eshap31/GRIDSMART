@@ -1,7 +1,6 @@
 package com.example.gridsmart.graph;
 
-import com.example.gridsmart.model.EnergyNode;
-import com.example.gridsmart.model.NodeType;
+import com.example.gridsmart.model.*;
 
 import java.util.*;
 
@@ -14,6 +13,11 @@ public class Graph {
     private final Map<String, List<GraphEdge>> outgoingEdges; // Adjacency list representation
     private final Map<String, List<GraphEdge>> incomingEdges; // Reverse adjacency list for easy lookup
 
+    // Super nodes for network flow algorithms
+    private SuperSource superSource;
+    private SuperSink superSink;
+    private boolean hasSuperNodes;
+
     /*
      * Creates a new empty graph
      */
@@ -21,6 +25,7 @@ public class Graph {
         this.nodes = new HashMap<>();
         this.outgoingEdges = new HashMap<>();
         this.incomingEdges = new HashMap<>();
+        this.hasSuperNodes = false;
     }
 
     /*
@@ -215,38 +220,196 @@ public class Graph {
         return residualGraph;
     }
 
-    /*
-     * Returns a string representation of the graph
+    // Methods for super nodes
+
+    /**
+     * Adds a SuperSource node to the graph with connections to all energy sources.
+     * Adds edges from SuperSource to each energy source with capacity equal to available energy.
+     *
+     * @param superSourceId The ID to use for the super source node
+     * @return The created SuperSource node
      */
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Graph with ").append(nodes.size()).append(" nodes and ");
-
-        int edgeCount = 0;
-        for (List<GraphEdge> edges : outgoingEdges.values()) {
-            edgeCount += edges.size();
+    public SuperSource addSuperSource(String superSourceId) {
+        // Create SuperSource if it doesn't exist
+        if (superSource == null) {
+            superSource = new SuperSource(superSourceId);
+            addNode(superSource);
         }
 
-        sb.append(edgeCount).append(" edges:\n");
-
-        // Print nodes
-        sb.append("Nodes:\n");
-        for (EnergyNode node : nodes.values()) {
-            sb.append("  ").append(node.getId()).append(" (").append(node.getNodeType()).append(")\n");
-        }
-
-        // Print edges
-        sb.append("Edges:\n");
-        for (String sourceId : outgoingEdges.keySet()) {
-            for (GraphEdge edge : outgoingEdges.get(sourceId)) {
-                sb.append("  ").append(sourceId).append(" -> ").append(edge.getTarget().getId())
-                        .append(" [capacity=").append(edge.getCapacity())
-                        .append(", flow=").append(edge.getFlow())
-                        .append(", weight=").append(edge.getWeight()).append("]\n");
+        // Connect SuperSource to all energy sources
+        List<EnergyNode> sources = getNodesByType(NodeType.SOURCE);
+        for (EnergyNode node : sources) {
+            if (node instanceof EnergySource) {
+                EnergySource source = (EnergySource) node;
+                if (source.isActive()) {
+                    // Capacity equals available energy from the source
+                    double availableEnergy = source.getAvailableEnergy();
+                    addEdge(superSource.getId(), source.getId(), availableEnergy);
+                }
             }
         }
 
-        return sb.toString();
+        hasSuperNodes = true;
+        return superSource;
+    }
+
+    /**
+     * Adds a SuperSink node to the graph with connections from all energy consumers.
+     * Adds edges from each energy consumer to SuperSink with capacity equal to consumer demand.
+     *
+     * @param superSinkId The ID to use for the super sink node
+     * @return The created SuperSink node
+     */
+    public SuperSink addSuperSink(String superSinkId) {
+        // Create SuperSink if it doesn't exist
+        if (superSink == null) {
+            superSink = new SuperSink(superSinkId);
+            addNode(superSink);
+        }
+
+        // Connect all energy consumers to SuperSink
+        List<EnergyNode> consumers = getNodesByType(NodeType.CONSUMER);
+        for (EnergyNode node : consumers) {
+            if (node instanceof EnergyConsumer) {
+                EnergyConsumer consumer = (EnergyConsumer) node;
+                if (consumer.isActive()) {
+                    // Capacity equals consumer demand
+                    double demand = consumer.getDemand();
+                    addEdge(consumer.getId(), superSink.getId(), demand);
+                }
+            }
+        }
+
+        hasSuperNodes = true;
+        return superSink;
+    }
+
+    /**
+     * Updates the capacities of edges connecting from SuperSource to energy sources
+     * based on current available energy.
+     */
+    public void updateSuperSourceEdges() {
+        if (superSource == null) {
+            return;
+        }
+
+        List<GraphEdge> edges = getOutgoingEdges(superSource.getId());
+        for (GraphEdge edge : edges) {
+            EnergyNode targetNode = edge.getTarget();
+            if (targetNode instanceof EnergySource) {
+                EnergySource source = (EnergySource) targetNode;
+                double availableEnergy = source.getAvailableEnergy();
+                edge.setCapacity(availableEnergy);
+            }
+        }
+    }
+
+    /**
+     * Updates the capacities of edges connecting from energy consumers to SuperSink
+     * based on current demand.
+     */
+    public void updateSuperSinkEdges() {
+        if (superSink == null) {
+            return;
+        }
+
+        List<GraphEdge> edges = getIncomingEdges(superSink.getId());
+        for (GraphEdge edge : edges) {
+            EnergyNode sourceNode = edge.getSource();
+            if (sourceNode instanceof EnergyConsumer) {
+                EnergyConsumer consumer = (EnergyConsumer) sourceNode;
+                double demand = consumer.getDemand();
+                edge.setCapacity(demand);
+            }
+        }
+    }
+
+    /**
+     * Updates all super node edges based on current energy availability and demand
+     */
+    public void updateSuperNodeEdges() {
+        updateSuperSourceEdges();
+        updateSuperSinkEdges();
+    }
+
+    /**
+     * Adds both SuperSource and SuperSink nodes to the graph and connects them appropriately
+     *
+     * @param superSourceId The ID to use for the super source node
+     * @param superSinkId   The ID to use for the super sink node
+     */
+    public void addSuperNodes(String superSourceId, String superSinkId) {
+        addSuperSource(superSourceId);
+        addSuperSink(superSinkId);
+    }
+
+    /**
+     * Removes super nodes and their associated edges from the graph
+     */
+    public void removeSuperNodes() {
+        if (superSource != null) {
+            removeNode(superSource.getId());
+            superSource = null;
+        }
+
+        if (superSink != null) {
+            removeNode(superSink.getId());
+            superSink = null;
+        }
+
+        hasSuperNodes = false;
+    }
+
+    /**
+     * Check if the graph has super nodes
+     *
+     * @return true if super nodes are present, false otherwise
+     */
+    public boolean hasSuperNodes() {
+        return hasSuperNodes;
+    }
+
+    /**
+     * Get the super source node
+     *
+     * @return the super source node or null if not present
+     */
+    public SuperSource getSuperSource() {
+        return superSource;
+    }
+
+    /**
+     * Get the super sink node
+     *
+     * @return the super sink node or null if not present
+     */
+    public SuperSink getSuperSink() {
+        return superSink;
+    }
+
+    /**
+     * Creates a graph with super nodes for max flow calculations
+     *
+     * @return a new graph with super source and sink
+     */
+    public Graph createFlowNetworkWithSuperNodes() {
+        Graph flowNetwork = new Graph();
+
+        // Copy all nodes and edges
+        for (EnergyNode node : nodes.values()) {
+            flowNetwork.addNode(node);
+        }
+
+        for (String sourceId : outgoingEdges.keySet()) {
+            for (GraphEdge edge : outgoingEdges.get(sourceId)) {
+                String targetId = edge.getTarget().getId();
+                flowNetwork.addEdge(sourceId, targetId, edge.getCapacity(), edge.getWeight());
+            }
+        }
+
+        // Add super nodes
+        flowNetwork.addSuperNodes("super_source", "super_sink");
+
+        return flowNetwork;
     }
 }

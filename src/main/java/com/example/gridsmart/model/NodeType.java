@@ -5,5 +5,7 @@ package com.example.gridsmart.model;
  */
 public enum NodeType {
     SOURCE,
-    CONSUMER
+    CONSUMER,
+    SUPER_SOURCE,
+    SUPER_SINK
 }
