@@ -283,6 +283,9 @@ public class EnergyAllocationManager {
     /*
      * Build a full network graph from the current allocations
      */
+    /*
+     * Build a full network graph from the current allocations
+     */
     public void buildGraphFromAllocations() {
         // Clear the graph
         Graph newGraph = new Graph();
@@ -321,7 +324,7 @@ public class EnergyAllocationManager {
         for (EnergyNode source : newGraph.getAllNodes()) {
             for (GraphEdge edge : newGraph.getOutgoingEdges(source.getId())) {
                 EnergyNode target = edge.getTarget();
-                GraphEdge newEdge = this.graph.addEdge(source.getId(), target.getId(), edge.getCapacity(), edge.getWeight());
+                GraphEdge newEdge = this.graph.addEdge(source.getId(), target.getId(), edge.getCapacity());
                 newEdge.setFlow(edge.getFlow());
             }
         }
@@ -431,8 +434,7 @@ public class EnergyAllocationManager {
                         GraphEdge newEdge = flowGraph.addEdge(
                                 node.getId(),
                                 target.getId(),
-                                edge.getCapacity(),
-                                edge.getWeight()
+                                edge.getCapacity()
                         );
 
                         newEdge.setFlow(edge.getFlow());

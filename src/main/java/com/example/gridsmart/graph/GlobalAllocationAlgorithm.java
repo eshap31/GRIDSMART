@@ -4,112 +4,111 @@ import com.example.gridsmart.model.*;
 import com.example.gridsmart.util.EnergyConsumerQueue;
 import java.util.*;
 
-/**
- * Implementation of prioritized global energy allocation algorithm.
+/*
+ * global energy allocation algorithm.
  * Allocates energy to consumers in order of their priority levels.
  */
-public class GlobalAllocationAlgorithm {
-
-    /**
+public class GlobalAllocationAlgorithm
+{
+    /*
      * Runs the prioritized allocation algorithm on the given graph.
      * Consumers with higher priority (lower priority number) are served first.
      *
-     * @param graph The energy network graph
-     * @param consumers List of energy consumers
-     * @param sources List of energy sources
+     * graph The energy network graph
+     * consumers List of energy consumers
+     * sources List of energy sources
      */
     public void run(Graph graph, List<EnergyConsumer> consumers, List<EnergySource> sources) {
-        // Make sure all consumers and sources are in the graph
+        addNodesToGraph(graph, consumers, sources);
+        Map<Integer, List<EnergyConsumer>> priorityGroups = groupConsumersByPriority(consumers);
+        SuperSource superSource = graph.addSuperSource("super_source");
+
+        List<Integer> priorityLevels = new ArrayList<>(priorityGroups.keySet());
+        Collections.sort(priorityLevels);  // Lower numbers = higher priority
+
+        for (int priorityLevel : priorityLevels) {
+            List<EnergyConsumer> priorityConsumers = priorityGroups.get(priorityLevel);
+            processPriorityLevel(graph, superSource, priorityLevel, priorityConsumers, sources);
+        }
+
+        graph.removeNode(superSource.getId());
+    }
+
+    // makes sure that the nodes are added to the graph
+    // if not, it adds them
+    private void addNodesToGraph(Graph graph, List<EnergyConsumer> consumers, List<EnergySource> sources) {
         for (EnergySource source : sources) {
             if (graph.getNode(source.getId()) == null) {
                 graph.addNode(source);
             }
         }
-
         for (EnergyConsumer consumer : consumers) {
             if (graph.getNode(consumer.getId()) == null) {
                 graph.addNode(consumer);
             }
         }
+    }
 
-        // Create a priority queue for consumers
+    // groups consumers by priority
+    // returns a Map of priority levels to lists of consumers
+    private Map<Integer, List<EnergyConsumer>> groupConsumersByPriority(List<EnergyConsumer> consumers) {
         EnergyConsumerQueue consumerQueue = new EnergyConsumerQueue();
-
-        // Add all consumers to the queue
         for (EnergyConsumer consumer : consumers) {
             consumerQueue.add(consumer);
         }
 
-        // Group consumers by priority level
         Map<Integer, List<EnergyConsumer>> priorityGroups = new HashMap<>();
 
-        // Extract consumers from queue to maintain priority order
         while (!consumerQueue.isEmpty()) {
             EnergyConsumer consumer = consumerQueue.poll();
             int priority = consumer.getPriority();
 
-            // Add to appropriate priority group
-            if (!priorityGroups.containsKey(priority)) {
-                priorityGroups.put(priority, new ArrayList<>());
-            }
-            priorityGroups.get(priority).add(consumer);
+            priorityGroups.computeIfAbsent(priority, k -> new ArrayList<>()).add(consumer);
         }
 
-        // Get priority levels in ascending order (lower number = higher priority)
-        List<Integer> priorityLevels = new ArrayList<>(priorityGroups.keySet());
-        Collections.sort(priorityLevels);
-
-        // Create super source
-        SuperSource superSource = graph.addSuperSource("super_source");
-
-        // Process each priority level in order
-        for (int priorityLevel : priorityLevels) {
-            List<EnergyConsumer> priorityConsumers = priorityGroups.get(priorityLevel);
-
-            // Create super sink for this priority level
-            SuperSink superSink = new SuperSink("super_sink_p" + priorityLevel);
-            graph.addNode(superSink);  // Explicitly add the node before adding edges
-
-            // Connect only consumers at this priority level to the super sink
-            List<GraphEdge> consumerToSinkEdges = new ArrayList<>();
-            for (EnergyConsumer consumer : priorityConsumers) {
-                // Only connect if consumer still has remaining demand
-                if (consumer.getRemainingDemand() > 0) {
-                    double demandCapacity = consumer.getRemainingDemand();
-                    GraphEdge edge = graph.addEdge(consumer.getId(), superSink.getId(), demandCapacity);
-                    consumerToSinkEdges.add(edge);
-                }
-            }
-
-            // Update super source edges based on current available energy
-            graph.updateSuperSourceEdges();
-
-            // Run Edmonds-Karp algorithm for this priority level
-            runEdmondsKarp(graph, superSource, superSink);
-
-            // Update consumer allocations based on the flow results
-            updateConsumerAllocations(graph, priorityConsumers);
-
-            // Update source loads based on current flows
-            updateSourceLoads(graph, sources);
-
-            // Remove super sink and its connections for this priority level
-            for (GraphEdge edge : consumerToSinkEdges) {
-                graph.removeEdge(edge.getSource().getId(), edge.getTarget().getId());
-            }
-            graph.removeNode(superSink.getId());
-        }
-
-        // Clean up: remove super source
-        graph.removeNode(superSource.getId());
+        return priorityGroups;
     }
 
-    /**
+    // handle each priority level's allocation
+    private void processPriorityLevel(Graph graph, SuperSource superSource, int priorityLevel,
+                                      List<EnergyConsumer> priorityConsumers, List<EnergySource> sources) {
+        // add a Sink Node
+        SuperSink superSink = new SuperSink("super_sink_p" + priorityLevel);
+        graph.addNode(superSink);
+
+        // connect the consumers to the Sink Node
+        List<GraphEdge> consumerToSinkEdges = new ArrayList<>();
+        for (EnergyConsumer consumer : priorityConsumers) {
+            if (consumer.getRemainingDemand() > 0) {
+                double demandCapacity = consumer.getRemainingDemand();
+                GraphEdge edge = graph.addEdge(consumer.getId(), superSink.getId(), demandCapacity);
+                consumerToSinkEdges.add(edge);
+            }
+        }
+
+        // update the super source edges
+        graph.updateSuperSourceEdges();
+
+        // run the Edmonds-Karp algorithm on the current priority level
+        runEdmondsKarp(graph, superSource, superSink);
+
+
+        updateConsumerAllocations(graph, priorityConsumers);
+        updateSourceLoads(graph, sources);
+
+        for (GraphEdge edge : consumerToSinkEdges) {
+            graph.removeEdge(edge.getSource().getId(), edge.getTarget().getId());
+        }
+        graph.removeNode(superSink.getId());
+    }
+
+
+    /*
      * Runs the Edmonds-Karp algorithm between the given super source and super sink.
      *
-     * @param graph The energy network graph
-     * @param superSource The super source node
-     * @param superSink The super sink node
+     * graph - The energy network graph
+     * superSource - The super source node
+     * superSink - The super sink node
      */
     private void runEdmondsKarp(Graph graph, SuperSource superSource, SuperSink superSink) {
         // Map to store parent edges for path reconstruction
@@ -152,11 +151,10 @@ public class GlobalAllocationAlgorithm {
         }
     }
 
-    /**
+    /*
      * Updates consumer allocations based on the current flow in the graph.
-     *
-     * @param graph The energy network graph with updated flows
-     * @param consumers List of consumers to update
+     * graph - The energy network graph with updated flows
+     * consumers - List of consumers to update
      */
     private void updateConsumerAllocations(Graph graph, List<EnergyConsumer> consumers) {
         for (EnergyConsumer consumer : consumers) {
@@ -175,11 +173,10 @@ public class GlobalAllocationAlgorithm {
         }
     }
 
-    /**
+    /*
      * Updates source loads based on the current flow in the graph.
-     *
-     * @param graph The energy network graph with updated flows
-     * @param sources List of sources to update
+     * graph - The energy network graph with updated flows
+     * sources - List of sources to update
      */
     private void updateSourceLoads(Graph graph, List<EnergySource> sources) {
         for (EnergySource source : sources) {

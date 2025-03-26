@@ -4,7 +4,7 @@ import com.example.gridsmart.model.EnergyNode;
 
 /*
  * Represents a directed edge in the energy grid graph, connecting a source node
- * to a consumer node with capacity, flow, and cost/weight properties.
+ * to a consumer node with capacity and flow properties.
  * Enhanced to support residual graph algorithms.
  */
 public class GraphEdge {
@@ -12,19 +12,17 @@ public class GraphEdge {
     private final EnergyNode target;
     private double capacity;   // Maximum energy that can flow through this edge
     private double flow;       // Current energy flowing through this edge
-    private double weight;     // Cost or weight of using this edge (can represent transmission loss, financial cost, etc.)
     private boolean active;    // Whether this edge is currently active in the network
     private boolean isReverse; // Indicates if this is a reverse edge in a residual graph
     private GraphEdge reverseEdge; // Reference to the reverse edge in a residual graph
 
     /*
-     * Creates a new edge between source and target with specified capacity and weight
+     * Creates a new edge between source and target with specified capacity
      */
-    public GraphEdge(EnergyNode source, EnergyNode target, double capacity, double weight) {
+    public GraphEdge(EnergyNode source, EnergyNode target, double capacity) {
         this.source = source;
         this.target = target;
         this.capacity = capacity;
-        this.weight = weight;
         this.flow = 0;
         this.active = true;
         this.isReverse = false;
@@ -32,17 +30,10 @@ public class GraphEdge {
     }
 
     /*
-     * Creates a new edge between source and target with specified capacity and default weight of 1.0
-     */
-    public GraphEdge(EnergyNode source, EnergyNode target, double capacity) {
-        this(source, target, capacity, 1.0);
-    }
-
-    /*
      * Creates a new residual edge (either forward or reverse)
      */
-    public GraphEdge(EnergyNode source, EnergyNode target, double capacity, double weight, boolean isReverse) {
-        this(source, target, capacity, weight);
+    public GraphEdge(EnergyNode source, EnergyNode target, double capacity, boolean isReverse) {
+        this(source, target, capacity);
         this.isReverse = isReverse;
     }
 
@@ -121,20 +112,6 @@ public class GraphEdge {
     }
 
     /*
-     * Returns the weight/cost of this edge
-     */
-    public double getWeight() {
-        return weight;
-    }
-
-    /*
-     * Sets the weight/cost of this edge
-     */
-    public void setWeight(double weight) {
-        this.weight = weight;
-    }
-
-    /*
      * Returns true if this edge is active
      */
     public boolean isActive() {
@@ -181,8 +158,8 @@ public class GraphEdge {
      * and sets up the bidirectional relationship between edges
      */
     public GraphEdge createReverseEdge() {
-        // Reverse edges have the same nodes but swapped, and a negated weight
-        GraphEdge reverse = new GraphEdge(target, source, 0, -weight, true);
+        // Reverse edges have the same nodes but swapped
+        GraphEdge reverse = new GraphEdge(target, source, 0, true);
 
         // Set up the bidirectional relationship
         this.reverseEdge = reverse;
@@ -198,7 +175,6 @@ public class GraphEdge {
                 ", target=" + target.getId() +
                 ", capacity=" + capacity +
                 ", flow=" + flow +
-                ", weight=" + weight +
                 ", active=" + active +
                 ", isReverse=" + isReverse +
                 '}';

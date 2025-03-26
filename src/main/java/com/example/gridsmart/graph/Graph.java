@@ -33,6 +33,7 @@ public class Graph {
      */
     public void addNode(EnergyNode node) {
         nodes.put(node.getId(), node);
+        // add to the adjecency list
         outgoingEdges.putIfAbsent(node.getId(), new ArrayList<>());
         incomingEdges.putIfAbsent(node.getId(), new ArrayList<>());
     }
@@ -66,7 +67,7 @@ public class Graph {
     /*
      * Adds a directed edge from source to target
      */
-    public GraphEdge addEdge(String sourceId, String targetId, double capacity, double weight) {
+    public GraphEdge addEdge(String sourceId, String targetId, double capacity) {
         EnergyNode source = nodes.get(sourceId);
         EnergyNode target = nodes.get(targetId);
 
@@ -74,18 +75,11 @@ public class Graph {
             throw new IllegalArgumentException("Source or target node not found in graph");
         }
 
-        GraphEdge edge = new GraphEdge(source, target, capacity, weight);
+        GraphEdge edge = new GraphEdge(source, target, capacity);
         outgoingEdges.get(sourceId).add(edge);
         incomingEdges.get(targetId).add(edge);
 
         return edge;
-    }
-
-    /*
-     * Adds a directed edge from source to target with default weight 1.0
-     */
-    public GraphEdge addEdge(String sourceId, String targetId, double capacity) {
-        return addEdge(sourceId, targetId, capacity, 1.0);
     }
 
     /*
@@ -211,8 +205,7 @@ public class Graph {
                     GraphEdge forwardResidualEdge = residualGraph.addEdge(
                             sourceId,
                             targetId,
-                            residualCapacity,
-                            edge.getWeight()
+                            residualCapacity
                     );
                     // Mark that this is a forward edge (not reverse)
                     forwardResidualEdge.setReverse(false);
@@ -224,8 +217,7 @@ public class Graph {
                     GraphEdge reverseResidualEdge = residualGraph.addEdge(
                             targetId,
                             sourceId,
-                            flow,
-                            -edge.getWeight()
+                            flow
                     );
                     // Mark that this is a reverse edge
                     reverseResidualEdge.setReverse(true);
@@ -245,12 +237,11 @@ public class Graph {
 
     // Methods for super nodes
 
-    /**
+    /*
      * Adds a SuperSource node to the graph with connections to all energy sources.
      * Adds edges from SuperSource to each energy source with capacity equal to available energy.
-     *
-     * @param superSourceId The ID to use for the super source node
-     * @return The created SuperSource node
+     * superSourceId - The ID to use for the super source node
+     * return The created SuperSource node
      */
     public SuperSource addSuperSource(String superSourceId) {
         // Create SuperSource if it doesn't exist
@@ -276,12 +267,11 @@ public class Graph {
         return superSource;
     }
 
-    /**
+    /*
      * Adds a SuperSink node to the graph with connections from all energy consumers.
      * Adds edges from each energy consumer to SuperSink with capacity equal to consumer demand.
-     *
-     * @param superSinkId The ID to use for the super sink node
-     * @return The created SuperSink node
+     * superSinkId - The ID to use for the super sink node
+     * The created -SuperSink node
      */
     public SuperSink addSuperSink(String superSinkId) {
         // Create SuperSink if it doesn't exist
@@ -307,7 +297,7 @@ public class Graph {
         return superSink;
     }
 
-    /**
+    /*
      * Updates the capacities of edges connecting from SuperSource to energy sources
      * based on current available energy.
      */
@@ -327,7 +317,7 @@ public class Graph {
         }
     }
 
-    /**
+    /*
      * Updates the capacities of edges connecting from energy consumers to SuperSink
      * based on current demand.
      */
@@ -347,7 +337,7 @@ public class Graph {
         }
     }
 
-    /**
+    /*
      * Updates all super node edges based on current energy availability and demand
      */
     public void updateSuperNodeEdges() {
@@ -355,18 +345,17 @@ public class Graph {
         updateSuperSinkEdges();
     }
 
-    /**
+    /*
      * Adds both SuperSource and SuperSink nodes to the graph and connects them appropriately
-     *
-     * @param superSourceId The ID to use for the super source node
-     * @param superSinkId   The ID to use for the super sink node
+     * superSourceId - The ID to use for the super source node
+     * superSinkId  - The ID to use for the super sink node
      */
     public void addSuperNodes(String superSourceId, String superSinkId) {
         addSuperSource(superSourceId);
         addSuperSink(superSinkId);
     }
 
-    /**
+    /*
      * Removes super nodes and their associated edges from the graph
      */
     public void removeSuperNodes() {
@@ -383,37 +372,33 @@ public class Graph {
         hasSuperNodes = false;
     }
 
-    /**
+    /*
      * Check if the graph has super nodes
-     *
-     * @return true if super nodes are present, false otherwise
+     * return true if super nodes are present, false otherwise
      */
     public boolean hasSuperNodes() {
         return hasSuperNodes;
     }
 
-    /**
+    /*
      * Get the super source node
-     *
-     * @return the super source node or null if not present
+     * return the super source node or null if not present
      */
     public SuperSource getSuperSource() {
         return superSource;
     }
 
-    /**
+    /*
      * Get the super sink node
-     *
-     * @return the super sink node or null if not present
+     * return the super sink node or null if not present
      */
     public SuperSink getSuperSink() {
         return superSink;
     }
 
-    /**
+    /*
      * Creates a graph with super nodes for max flow calculations
-     *
-     * @return a new graph with super source and sink
+     * return a new graph with super source and sink
      */
     public Graph createFlowNetworkWithSuperNodes() {
         Graph flowNetwork = new Graph();
@@ -426,7 +411,7 @@ public class Graph {
         for (String sourceId : outgoingEdges.keySet()) {
             for (GraphEdge edge : outgoingEdges.get(sourceId)) {
                 String targetId = edge.getTarget().getId();
-                flowNetwork.addEdge(sourceId, targetId, edge.getCapacity(), edge.getWeight());
+                flowNetwork.addEdge(sourceId, targetId, edge.getCapacity());
             }
         }
 
@@ -437,14 +422,13 @@ public class Graph {
     }
 
 
-    /**
+    /*
      * Finds an augmenting path from superSource to superSink using Breadth-First Search.
      * Only considers edges with residual capacity > 0.
-     *
-     * @param superSource The super source node
-     * @param superSink The super sink node
-     * @param parentEdges Map to store the parent edge of each node (for path reconstruction)
-     * @return true if an augmenting path exists, false otherwise
+     * superSource - The super source node
+     * superSink -  The super sink node
+     * parentEdges -  Map to store the parent edge of each node (for path reconstruction)
+     * return true if an augmenting path exists, false otherwise
      */
     public boolean BFS(EnergyNode superSource, EnergyNode superSink,
                        Map<String, GraphEdge> parentEdges) {
