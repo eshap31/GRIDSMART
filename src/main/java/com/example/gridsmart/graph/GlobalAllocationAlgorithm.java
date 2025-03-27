@@ -14,6 +14,10 @@ public class GlobalAllocationAlgorithm
     // Storage for allocations from each source to each consumer
     private Map<String, Map<String, Double>> allocationStore = new HashMap<>();
 
+    public Map<String, Map<String, Double>> getAllocationStore() {
+        return allocationStore;
+    }
+
     /**
      * Runs the prioritized allocation algorithm on the given graph.
      * graph - energy network graph

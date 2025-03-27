@@ -57,7 +57,7 @@ public class GraphBasedAllocationDemo {
         allocator.run(graph, consumers, sources);
 
         // Print results
-        System.out.println("\n\n===== Final Allocations =====");
+        System.out.println("===== Final Allocations =====");
         for (EnergyConsumer consumer : consumers) {
             double allocated = consumer.getAllocatedEnergy();
             double demand = consumer.getDemand();
@@ -79,50 +79,90 @@ public class GraphBasedAllocationDemo {
                     source.getCapacity());
         }
 
-        // Create an EnergyAllocationManager to get the detailed allocations
-        EnergyAllocationManager manager = new EnergyAllocationManager(graph);
+        // Get the detailed allocations directly from the algorithm's allocation store
+        Map<String, Map<String, Double>> allocationStore = allocator.getAllocationStore();
+
+        // Create maps for quick lookups
+        Map<String, EnergyConsumer> consumerMap = new HashMap<>();
+        for (EnergyConsumer consumer : consumers) {
+            consumerMap.put(consumer.getId(), consumer);
+        }
+
+        Map<String, EnergySource> sourceMap = new HashMap<>();
+        for (EnergySource source : sources) {
+            sourceMap.put(source.getId(), source);
+        }
 
         // Print detailed allocations per consumer with their sources
-        System.out.println("\n===== Detailed Allocations =====");
+        System.out.println("\n===== Detailed Allocations from Algorithm =====");
         for (EnergyConsumer consumer : consumers) {
-            Map<EnergySource, Allocation> allocations = manager.getAllocationsForConsumer(consumer);
+            String consumerId = consumer.getId();
 
             System.out.printf("Consumer %s (Priority %d, Demand %.2f):%n",
-                    consumer.getId(), consumer.getPriority(), consumer.getDemand());
+                    consumerId, consumer.getPriority(), consumer.getDemand());
 
-            if (allocations.isEmpty()) {
+            if (!allocationStore.containsKey(consumerId) || allocationStore.get(consumerId).isEmpty()) {
                 System.out.println("  No allocations");
             } else {
-                for (Map.Entry<EnergySource, Allocation> entry : allocations.entrySet()) {
-                    EnergySource source = entry.getKey();
-                    Allocation allocation = entry.getValue();
+                Map<String, Double> sourceAllocations = allocationStore.get(consumerId);
+                for (Map.Entry<String, Double> entry : sourceAllocations.entrySet()) {
+                    String sourceId = entry.getKey();
+                    double allocation = entry.getValue();
+                    EnergySource source = sourceMap.get(sourceId);
 
                     System.out.printf("  From %s (%s): %.2f%n",
-                            source.getId(), source.getType(), allocation.getAllocatedEnergy());
+                            sourceId, source.getType(), allocation);
                 }
             }
         }
 
         // New section: Print which consumers are allocated energy from each source
-        System.out.println("\n===== Source to Consumer Allocations =====");
+        System.out.println("\n===== Source to Consumer Allocations from Algorithm =====");
+
+        // Create reversed map: source -> consumer -> allocation
+        Map<String, Map<String, Double>> sourceToConsumerMap = new HashMap<>();
+
+        // Populate the reversed map
+        for (Map.Entry<String, Map<String, Double>> consumerEntry : allocationStore.entrySet()) {
+            String consumerId = consumerEntry.getKey();
+            Map<String, Double> sourceAllocations = consumerEntry.getValue();
+
+            for (Map.Entry<String, Double> sourceEntry : sourceAllocations.entrySet()) {
+                String sourceId = sourceEntry.getKey();
+                double allocation = sourceEntry.getValue();
+
+                // Initialize the inner map if needed
+                if (!sourceToConsumerMap.containsKey(sourceId)) {
+                    sourceToConsumerMap.put(sourceId, new HashMap<>());
+                }
+
+                // Add the allocation
+                sourceToConsumerMap.get(sourceId).put(consumerId, allocation);
+            }
+        }
+
+        // Print the source to consumer allocations
         for (EnergySource source : sources) {
-            Map<EnergyConsumer, Allocation> allocations = manager.getAllocationsForSource(source);
+            String sourceId = source.getId();
 
             System.out.printf("Source %s (%s, Capacity %.2f):%n",
-                    source.getId(), source.getType(), source.getCapacity());
+                    sourceId, source.getType(), source.getCapacity());
 
-            if (allocations.isEmpty()) {
+            if (!sourceToConsumerMap.containsKey(sourceId) || sourceToConsumerMap.get(sourceId).isEmpty()) {
                 System.out.println("  No consumers allocated");
             } else {
+                Map<String, Double> consumerAllocations = sourceToConsumerMap.get(sourceId);
                 double totalAllocated = 0;
-                for (Map.Entry<EnergyConsumer, Allocation> entry : allocations.entrySet()) {
-                    EnergyConsumer consumer = entry.getKey();
-                    Allocation allocation = entry.getValue();
+
+                for (Map.Entry<String, Double> entry : consumerAllocations.entrySet()) {
+                    String consumerId = entry.getKey();
+                    double allocation = entry.getValue();
+                    EnergyConsumer consumer = consumerMap.get(consumerId);
 
                     System.out.printf("  To %s (Priority %d): %.2f%n",
-                            consumer.getId(), consumer.getPriority(), allocation.getAllocatedEnergy());
+                            consumerId, consumer.getPriority(), allocation);
 
-                    totalAllocated += allocation.getAllocatedEnergy();
+                    totalAllocated += allocation;
                 }
 
                 System.out.printf("  Total allocated: %.2f / %.2f (%.2f%%)%n",
