@@ -57,7 +57,7 @@ public class GraphBasedAllocationDemo {
         allocator.run(graph, consumers, sources);
 
         // Print results
-        System.out.println("===== Final Allocations =====");
+        System.out.println("\n\n===== Final Allocations =====");
         for (EnergyConsumer consumer : consumers) {
             double allocated = consumer.getAllocatedEnergy();
             double demand = consumer.getDemand();
@@ -71,7 +71,6 @@ public class GraphBasedAllocationDemo {
                     percentage);
         }
 
-
         System.out.println("\n===== Source Loads =====");
         for (EnergySource source : sources) {
             System.out.printf("Source %s: Load %.2f / Capacity %.2f%n",
@@ -80,9 +79,11 @@ public class GraphBasedAllocationDemo {
                     source.getCapacity());
         }
 
-        // Print allocations per consumer with their sources
-        System.out.println("\n===== Detailed Allocations =====");
+        // Create an EnergyAllocationManager to get the detailed allocations
         EnergyAllocationManager manager = new EnergyAllocationManager(graph);
+
+        // Print detailed allocations per consumer with their sources
+        System.out.println("\n===== Detailed Allocations =====");
         for (EnergyConsumer consumer : consumers) {
             Map<EnergySource, Allocation> allocations = manager.getAllocationsForConsumer(consumer);
 
@@ -96,9 +97,37 @@ public class GraphBasedAllocationDemo {
                     EnergySource source = entry.getKey();
                     Allocation allocation = entry.getValue();
 
-                    System.out.printf("  From %s: %.2f%n",
-                            source.getId(), allocation.getAllocatedEnergy());
+                    System.out.printf("  From %s (%s): %.2f%n",
+                            source.getId(), source.getType(), allocation.getAllocatedEnergy());
                 }
+            }
+        }
+
+        // New section: Print which consumers are allocated energy from each source
+        System.out.println("\n===== Source to Consumer Allocations =====");
+        for (EnergySource source : sources) {
+            Map<EnergyConsumer, Allocation> allocations = manager.getAllocationsForSource(source);
+
+            System.out.printf("Source %s (%s, Capacity %.2f):%n",
+                    source.getId(), source.getType(), source.getCapacity());
+
+            if (allocations.isEmpty()) {
+                System.out.println("  No consumers allocated");
+            } else {
+                double totalAllocated = 0;
+                for (Map.Entry<EnergyConsumer, Allocation> entry : allocations.entrySet()) {
+                    EnergyConsumer consumer = entry.getKey();
+                    Allocation allocation = entry.getValue();
+
+                    System.out.printf("  To %s (Priority %d): %.2f%n",
+                            consumer.getId(), consumer.getPriority(), allocation.getAllocatedEnergy());
+
+                    totalAllocated += allocation.getAllocatedEnergy();
+                }
+
+                System.out.printf("  Total allocated: %.2f / %.2f (%.2f%%)%n",
+                        totalAllocated, source.getCapacity(),
+                        (totalAllocated / source.getCapacity()) * 100.0);
             }
         }
     }
