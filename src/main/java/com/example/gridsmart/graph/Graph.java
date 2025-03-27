@@ -10,8 +10,8 @@ import java.util.*;
  */
 public class Graph {
     private final Map<String, EnergyNode> nodes;
-    private final Map<String, List<GraphEdge>> outgoingEdges; // Adjacency list representation
-    private final Map<String, List<GraphEdge>> incomingEdges; // Reverse adjacency list for easy lookup
+    private final Map<String, List<GraphEdge>> outgoingEdges; // Map that holds a list of outgoing nodes for each node
+    private final Map<String, List<GraphEdge>> incomingEdges; // Map that holds a list of incoming edges for each node
 
     // Super nodes for network flow algorithms
     private SuperSource superSource;
@@ -30,6 +30,7 @@ public class Graph {
 
     /*
      * Adds a node to the graph
+     * node - EnergyNode implementation
      */
     public void addNode(EnergyNode node) {
         nodes.put(node.getId(), node);
@@ -239,8 +240,7 @@ public class Graph {
 
     /*
      * Adds a SuperSource node to the graph with connections to all energy sources.
-     * Adds edges from SuperSource to each energy source with capacity equal to available energy.
-     * superSourceId - The ID to use for the super source node
+     * Flow should be 0 , and capacity should the sources capacity
      * return The created SuperSource node
      */
     public SuperSource addSuperSource(String superSourceId) {
@@ -432,6 +432,8 @@ public class Graph {
      */
     public boolean BFS(EnergyNode superSource, EnergyNode superSink,
                        Map<String, GraphEdge> parentEdges) {
+        System.out.println("\n------ BFS Path Search ------");
+
         // Clear the parent edges map
         parentEdges.clear();
 
@@ -463,9 +465,14 @@ public class Graph {
 
                 // Store the parent edge for this node
                 parentEdges.put(targetId, edge);
+                System.out.println("Added to path: " + current.getId() + " -> " + targetId +
+                        " (capacity: " + edge.getCapacity() +
+                        ", flow: " + edge.getFlow() +
+                        ", residual: " + edge.getResidualCapacity() + ")");
 
                 // If we've reached the superSink, we found a path
                 if (targetId.equals(superSink.getId())) {
+                    System.out.println("Found path to sink!");
                     return true;
                 }
 
@@ -474,6 +481,8 @@ public class Graph {
                 queue.add(target);
             }
         }
+
+        System.out.println("No augmenting path found");
 
         // No augmenting path found
         return false;

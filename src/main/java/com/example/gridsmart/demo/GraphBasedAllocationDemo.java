@@ -10,8 +10,6 @@ import java.util.*;
  * and displays the results.
  */
 public class GraphBasedAllocationDemo {
-    private static final double INFINITE_CAPACITY = 99999.0; // Define a large value for "infinite" capacity
-
     public static void main(String[] args) {
         // Create sources
         EnergySource s1 = new EnergySource("S1", 300, SourceType.SOLAR);
@@ -49,8 +47,8 @@ public class GraphBasedAllocationDemo {
         // Add source-to-consumer edges with "infinite" capacity
         for (EnergySource source : sources) {
             for (EnergyConsumer consumer : consumers) {
-                // Use a large value to represent "infinite" capacity
-                graph.addEdge(source.getId(), consumer.getId(), INFINITE_CAPACITY);
+                // add edge from source to consumer
+                graph.addEdge(source.getId(), consumer.getId(), Double.MAX_VALUE);
             }
         }
 

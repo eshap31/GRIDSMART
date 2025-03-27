@@ -4,25 +4,39 @@ import com.example.gridsmart.model.*;
 import com.example.gridsmart.util.EnergyConsumerQueue;
 import java.util.*;
 
-/*
+/**
  * global energy allocation algorithm.
  * Allocates energy to consumers in order of their priority levels.
+ * This version only adds the relevant consumers to the graph for each priority level.
  */
 public class GlobalAllocationAlgorithm
 {
-    /*
+    /**
      * Runs the prioritized allocation algorithm on the given graph.
-     * Consumers with higher priority (lower priority number) are served first.
-     *
-     * graph The energy network graph
-     * consumers List of energy consumers
-     * sources List of energy sources
+     * graph - energy network graph
+     * consumers - List of energy consumers
+     * sources - List of energy sources
      */
     public void run(Graph graph, List<EnergyConsumer> consumers, List<EnergySource> sources) {
-        addNodesToGraph(graph, consumers, sources);
+        // Add sources to the graph
+        for (EnergySource source : sources) {
+            if (graph.getNode(source.getId()) == null) {
+                graph.addNode(source);
+            }
+        }
+
+        // Clear any existing consumers from the graph
+        // This ensures we start fresh and only add the ones we're processing
+        for (EnergyConsumer consumer : consumers) {
+            if (graph.getNode(consumer.getId()) != null) {
+                graph.removeNode(consumer.getId());
+            }
+        }
+
         Map<Integer, List<EnergyConsumer>> priorityGroups = groupConsumersByPriority(consumers);
         SuperSource superSource = graph.addSuperSource("super_source");
 
+        // create a list of all the priority levels in the graph
         List<Integer> priorityLevels = new ArrayList<>(priorityGroups.keySet());
         Collections.sort(priorityLevels);  // Lower numbers = higher priority
 
@@ -34,31 +48,20 @@ public class GlobalAllocationAlgorithm
         graph.removeNode(superSource.getId());
     }
 
-    // makes sure that the nodes are added to the graph
-    // if not, it adds them
-    private void addNodesToGraph(Graph graph, List<EnergyConsumer> consumers, List<EnergySource> sources) {
-        for (EnergySource source : sources) {
-            if (graph.getNode(source.getId()) == null) {
-                graph.addNode(source);
-            }
-        }
-        for (EnergyConsumer consumer : consumers) {
-            if (graph.getNode(consumer.getId()) == null) {
-                graph.addNode(consumer);
-            }
-        }
-    }
-
     // groups consumers by priority
     // returns a Map of priority levels to lists of consumers
     private Map<Integer, List<EnergyConsumer>> groupConsumersByPriority(List<EnergyConsumer> consumers) {
+        // create an EnergyConsumerQueue
         EnergyConsumerQueue consumerQueue = new EnergyConsumerQueue();
+
+        // Add all the consumers to the queue
         for (EnergyConsumer consumer : consumers) {
             consumerQueue.add(consumer);
         }
 
         Map<Integer, List<EnergyConsumer>> priorityGroups = new HashMap<>();
 
+        // group consumers by priority
         while (!consumerQueue.isEmpty()) {
             EnergyConsumer consumer = consumerQueue.poll();
             int priority = consumer.getPriority();
@@ -72,40 +75,92 @@ public class GlobalAllocationAlgorithm
     // handle each priority level's allocation
     private void processPriorityLevel(Graph graph, SuperSource superSource, int priorityLevel,
                                       List<EnergyConsumer> priorityConsumers, List<EnergySource> sources) {
-        // add a Sink Node
+        System.out.println("\n\n===== Processing Priority Level " + priorityLevel + " =====");
+
+        // 1. Add consumers of this priority level to the graph
+        for (EnergyConsumer consumer : priorityConsumers) {
+            if (consumer.getRemainingDemand() > 0) {
+                // Only add consumers that still have demand
+                graph.addNode(consumer);
+
+                // Connect sources to consumers with "infinite" capacity
+                for (EnergySource source : sources) {
+                    // Here we use available energy as the capacity, not infinite
+                    double sourceCapacity = source.getAvailableEnergy();
+                    if (sourceCapacity > 0) {
+                        graph.addEdge(source.getId(), consumer.getId(), sourceCapacity);
+                    }
+                }
+            }
+        }
+
+        // 2. Add a super sink for this priority level
         SuperSink superSink = new SuperSink("super_sink_p" + priorityLevel);
         graph.addNode(superSink);
 
-        // connect the consumers to the Sink Node
+        // 3. Connect the consumers to the super sink
         List<GraphEdge> consumerToSinkEdges = new ArrayList<>();
         for (EnergyConsumer consumer : priorityConsumers) {
-            if (consumer.getRemainingDemand() > 0) {
+            if (consumer.getRemainingDemand() > 0 && graph.getNode(consumer.getId()) != null) {
                 double demandCapacity = consumer.getRemainingDemand();
                 GraphEdge edge = graph.addEdge(consumer.getId(), superSink.getId(), demandCapacity);
                 consumerToSinkEdges.add(edge);
             }
         }
 
-        // update the super source edges
-        graph.updateSuperSourceEdges();
+        // 4. Update the super source edges to connect to all sources with their available capacity
+        for (EnergySource source : sources) {
+            // Remove any existing edge from super source to this source
+            if (graph.getEdge(superSource.getId(), source.getId()) != null) {
+                graph.removeEdge(superSource.getId(), source.getId());
+            }
 
-        // run the Edmonds-Karp algorithm on the current priority level
+            // Add new edge with current available capacity
+            double availableEnergy = source.getAvailableEnergy();
+            if (availableEnergy > 0) {
+                graph.addEdge(superSource.getId(), source.getId(), availableEnergy);
+            }
+        }
+
+        // 5. Print the graph state before running Edmonds-Karp
+        System.out.println("Graph before running Edmonds-Karp for priority level " + priorityLevel + ":");
+        printGraph(graph, "Before Edmonds-Karp");
+
+        // 6. Run the Edmonds-Karp algorithm for this priority level
         runEdmondsKarp(graph, superSource, superSink);
 
-
+        // 7. Update consumer allocations and source loads
         updateConsumerAllocations(graph, priorityConsumers);
         updateSourceLoads(graph, sources);
 
+        // 8. Print the graph state after allocation
+        System.out.println("Graph after allocation for priority level " + priorityLevel + ":");
+        printGraph(graph, "After Allocation");
+
+        // 9. Clean up: Remove all consumer nodes and edges for this priority level
+        // First remove edges to super sink
         for (GraphEdge edge : consumerToSinkEdges) {
             graph.removeEdge(edge.getSource().getId(), edge.getTarget().getId());
         }
-        graph.removeNode(superSink.getId());
-    }
 
+        // Then remove consumer nodes
+        for (EnergyConsumer consumer : priorityConsumers) {
+            if (graph.getNode(consumer.getId()) != null) {
+                // This will also remove all connected edges
+                graph.removeNode(consumer.getId());
+            }
+        }
+
+        // Finally remove the super sink
+        graph.removeNode(superSink.getId());
+
+        // 10. Print the graph state after cleanup
+        System.out.println("Graph after cleanup for priority level " + priorityLevel + ":");
+        printGraph(graph, "After Cleanup");
+    }
 
     /*
      * Runs the Edmonds-Karp algorithm between the given super source and super sink.
-     *
      * graph - The energy network graph
      * superSource - The super source node
      * superSink - The super sink node
@@ -114,16 +169,23 @@ public class GlobalAllocationAlgorithm
         // Map to store parent edges for path reconstruction
         Map<String, GraphEdge> parentEdges = new HashMap<>();
 
-        // Get node references from the graph
+        // Get the source and sink nodes
         EnergyNode source = graph.getNode(superSource.getId());
         EnergyNode sink = graph.getNode(superSink.getId());
 
+        int iteration = 0;
+
         // Main Edmonds-Karp algorithm loop
-        while (graph.BFS(source, sink, parentEdges)) {
-            // Find the bottleneck capacity
+        while (graph.BFS(source, sink, parentEdges))  // the current path will be in parentEdges
+        {
+            iteration++;
+            System.out.println("\n----- Edmonds-Karp Iteration " + iteration + " -----");
+            displayAugmentingPath(graph, source, sink, parentEdges);
+
+            // default bottleneck capacity is the maximum value
             double bottleneckCapacity = Double.MAX_VALUE;
 
-            // Calculate bottleneck capacity by tracing back from sink to source
+            // calculate bottleneck capacity by tracing back from sink to source
             String currentId = sink.getId();
             while (!currentId.equals(source.getId())) {
                 GraphEdge edge = parentEdges.get(currentId);
@@ -133,21 +195,71 @@ public class GlobalAllocationAlgorithm
 
             // Update flows along the path
             currentId = sink.getId();
+            int i=0;
             while (!currentId.equals(source.getId())) {
                 GraphEdge edge = parentEdges.get(currentId);
 
                 if (edge.isReverse()) {
                     // For reverse edges, decrease flow in the original edge
                     if (edge.getReverseEdge() != null) {
-                        edge.getReverseEdge().setFlow(edge.getReverseEdge().getFlow() - bottleneckCapacity);
+                        double oldFlow = edge.getReverseEdge().getFlow();
+                        edge.getReverseEdge().setFlow(oldFlow - bottleneckCapacity);
+
+                        // Update source/consumer if this is a direct source-consumer edge
+                        updateSourceConsumerOnFlowChange(graph, edge.getTarget(), edge.getSource(), -bottleneckCapacity);
                     }
                 } else {
                     // For forward edges, increase flow
-                    edge.setFlow(edge.getFlow() + bottleneckCapacity);
+                    double oldFlow = edge.getFlow();
+                    edge.setFlow(oldFlow + bottleneckCapacity);
+
+                    // Update source/consumer if this is a direct source-consumer edge
+                    updateSourceConsumerOnFlowChange(graph, edge.getSource(), edge.getTarget(), bottleneckCapacity);
                 }
 
                 currentId = edge.getSource().getId();
+                i++;
             }
+            printGraph(graph, "Graph after iteration " + iteration + " amount of edges in path: " + i);
+        }
+    }
+
+    /**
+     * Updates source loads and consumer allocations when edge flows change.
+     *
+     * @param graph The graph containing the nodes
+     * @param sourceNode The source node of the edge
+     * @param targetNode The target node of the edge
+     * @param flowChange The amount by which the flow has changed
+     */
+    private void updateSourceConsumerOnFlowChange(Graph graph, EnergyNode sourceNode, EnergyNode targetNode, double flowChange) {
+        // Check if this is a source-to-consumer edge
+        if (sourceNode.getNodeType() == NodeType.SOURCE && targetNode.getNodeType() == NodeType.CONSUMER) {
+            if (sourceNode instanceof EnergySource && targetNode instanceof EnergyConsumer) {
+                EnergySource source = (EnergySource) sourceNode;
+                EnergyConsumer consumer = (EnergyConsumer) targetNode;
+
+                // Update source load
+                double currentLoad = source.getCurrentLoad();
+                source.setCurrentLoad(currentLoad + flowChange);
+
+                // Update consumer allocation
+                double currentAllocation = consumer.getAllocatedEnergy();
+                consumer.setAllocatedEnergy(currentAllocation + flowChange);
+
+                System.out.println("  Updated: Source " + source.getId() +
+                        " load changed from " + currentLoad + " to " + source.getCurrentLoad());
+                System.out.println("  Updated: Consumer " + consumer.getId() +
+                        " allocation changed from " + currentAllocation + " to " + consumer.getAllocatedEnergy());
+            }
+        }
+        // Handle super source to source edges
+        else if (sourceNode.getNodeType() == NodeType.SUPER_SOURCE && targetNode.getNodeType() == NodeType.SOURCE) {
+            // Nothing to update here, super source doesn't have load
+        }
+        // Handle consumer to super sink edges
+        else if (sourceNode.getNodeType() == NodeType.CONSUMER && targetNode.getNodeType() == NodeType.SUPER_SINK) {
+            // Nothing to update here, super sink doesn't have allocation
         }
     }
 
@@ -158,18 +270,23 @@ public class GlobalAllocationAlgorithm
      */
     private void updateConsumerAllocations(Graph graph, List<EnergyConsumer> consumers) {
         for (EnergyConsumer consumer : consumers) {
-            double newAllocation = 0;
+            if (graph.getNode(consumer.getId()) != null) {  // Only process consumers that are in the graph
+                double newAllocation = 0;
 
-            // Sum up all incoming flows from sources
-            for (GraphEdge edge : graph.getIncomingEdges(consumer.getId())) {
-                if (edge.getSource().getNodeType() == NodeType.SOURCE) {
-                    newAllocation += edge.getFlow();
+                // Sum up all incoming flows from sources
+                for (GraphEdge edge : graph.getIncomingEdges(consumer.getId())) {
+                    if (edge.getSource().getNodeType() == NodeType.SOURCE) {
+                        newAllocation += edge.getFlow();
+                    }
+                }
+
+                if (newAllocation > 0) {
+                    // Set the new allocation (not adding to existing, as we're processing each priority level separately)
+                    consumer.setAllocatedEnergy(newAllocation);
+                    System.out.println("Consumer " + consumer.getId() + " allocated: " + newAllocation +
+                            " (demand: " + consumer.getDemand() + ")");
                 }
             }
-
-            // Add to any existing allocation
-            double totalAllocation = consumer.getAllocatedEnergy() + newAllocation;
-            consumer.setAllocatedEnergy(totalAllocation);
         }
     }
 
@@ -180,16 +297,196 @@ public class GlobalAllocationAlgorithm
      */
     private void updateSourceLoads(Graph graph, List<EnergySource> sources) {
         for (EnergySource source : sources) {
+            // Reset the load before recalculating
+            double previousLoad = source.getCurrentLoad();
             double totalLoad = 0;
 
-            // Sum up all outgoing flows to consumers
+            // Sum up all outgoing flows to consumers that are still in the graph
             for (GraphEdge edge : graph.getOutgoingEdges(source.getId())) {
                 if (edge.getTarget().getNodeType() == NodeType.CONSUMER) {
                     totalLoad += edge.getFlow();
                 }
             }
 
+            // Update the source load
             source.setCurrentLoad(totalLoad);
+            System.out.println("Source " + source.getId() + " load updated from " +
+                    previousLoad + " to " + totalLoad +
+                    " (capacity: " + source.getCapacity() + ")");
         }
+    }
+
+    /**
+     * Displays the complete augmenting path found by BFS and calculates the bottleneck capacity.
+     * This is useful for debugging the Edmonds-Karp algorithm.
+     *
+     * graph - The energy network graph
+     * source - Source node (super source)
+     * sink - Sink node (super sink)
+     * parentEdges - Map of parent edges from BFS
+     * return The bottleneck capacity of the path
+     */
+    private void displayAugmentingPath(Graph graph, EnergyNode source, EnergyNode sink, Map<String, GraphEdge> parentEdges) {
+        System.out.println("\n===== Augmenting Path Details =====");
+
+        // Find the bottleneck capacity and collect path nodes
+        double bottleneckCapacity = Double.MAX_VALUE;
+        List<String> pathNodes = new ArrayList<>();
+        List<Double> pathCapacities = new ArrayList<>();
+
+        // Start from sink and trace back to source
+        String currentId = sink.getId();
+        pathNodes.add(0, currentId);
+
+        while (!currentId.equals(source.getId())) {
+            GraphEdge edge = parentEdges.get(currentId);
+            if (edge == null) {
+                System.out.println("ERROR: Path is incomplete. Missing parent for node: " + currentId);
+                return;
+            }
+
+            double residualCapacity = edge.getResidualCapacity();
+            bottleneckCapacity = Math.min(bottleneckCapacity, residualCapacity);
+            pathCapacities.add(0, residualCapacity);
+
+            // Move to parent node
+            currentId = edge.getSource().getId();
+            pathNodes.add(0, currentId);
+        }
+
+        // Print the complete path with capacities
+        System.out.println("Path: ");
+        for (int i = 0; i < pathNodes.size() - 1; i++) {
+            String fromNode = pathNodes.get(i);
+            String toNode = pathNodes.get(i + 1);
+            GraphEdge edge = graph.getEdge(fromNode, toNode);
+
+            String edgeType = edge.isReverse() ? "reverse" : "forward";
+            System.out.printf("  %s -> %s (%s edge, capacity: %.2f, flow: %.2f, residual: %.2f)%n",
+                    fromNode, toNode, edgeType, edge.getCapacity(), edge.getFlow(), pathCapacities.get(i));
+        }
+
+        System.out.println("Bottleneck capacity: " + bottleneckCapacity);
+    }
+
+    /**
+     * Prints a detailed representation of the graph with all edges and their properties.
+     * This is useful for debugging and visualizing the current state of the network.
+     *
+     * @param graph The graph to print
+     * @param title Optional title for the graph printout
+     */
+    public static void printGraph(Graph graph, String title) {
+        System.out.println("\n========== " + title + " ==========");
+
+        // Get all nodes in the graph
+        Collection<EnergyNode> allNodes = graph.getAllNodes();
+        System.out.println("Graph contains " + allNodes.size() + " nodes");
+
+        // Sort nodes by type and ID for more organized output
+        List<EnergyNode> sortedNodes = new ArrayList<>(allNodes);
+        sortedNodes.sort((a, b) -> {
+            if (a.getNodeType() != b.getNodeType()) {
+                return a.getNodeType().compareTo(b.getNodeType());
+            }
+            return a.getId().compareTo(b.getId());
+        });
+
+        // Print all edges
+        System.out.println("\nEdges:");
+        System.out.println("----------------------------------------------");
+        System.out.printf("%-15s %-15s %10s %10s%n", "Source", "Target", "Flow", "Capacity");
+        System.out.println("----------------------------------------------");
+
+        int edgeCount = 0;
+        double totalFlow = 0;
+
+        // For each node
+        for (EnergyNode node : sortedNodes) {
+            List<GraphEdge> edges = graph.getOutgoingEdges(node.getId());
+
+            // Skip nodes with no outgoing edges
+            if (edges.isEmpty()) {
+                continue;
+            }
+
+            // Sort edges by target ID
+            edges.sort((a, b) -> a.getTarget().getId().compareTo(b.getTarget().getId()));
+
+            // Print each edge
+            for (GraphEdge edge : edges) {
+                System.out.printf("%-15s %-15s %10.2f %10.2f%n",
+                        edge.getSource().getId(),
+                        edge.getTarget().getId(),
+                        edge.getFlow(),
+                        edge.getCapacity());
+
+                edgeCount++;
+                totalFlow += edge.getFlow();
+            }
+        }
+
+        System.out.println("----------------------------------------------");
+        System.out.println("Total: " + edgeCount + " edges, " + totalFlow + " total flow");
+
+        // Summary section for sources and consumers
+        printNodeSummary(graph);
+    }
+
+    /**
+     * Prints a summary of sources and consumers in the graph.
+     *
+     * @param graph The graph to summarize
+     */
+    private static void printNodeSummary(Graph graph) {
+        System.out.println("\nSources Summary:");
+        System.out.println("----------------------------------------------");
+        System.out.printf("%-15s %15s %15s%n", "Source", "Load", "Capacity");
+        System.out.println("----------------------------------------------");
+
+        // Print sources
+        List<EnergyNode> sources = graph.getNodesByType(NodeType.SOURCE);
+        sources.sort((a, b) -> a.getId().compareTo(b.getId()));
+
+        for (EnergyNode node : sources) {
+            if (node instanceof EnergySource) {
+                EnergySource source = (EnergySource) node;
+                System.out.printf("%-15s %15.2f %15.2f%n",
+                        source.getId(),
+                        source.getCurrentLoad(),
+                        source.getCapacity());
+            }
+        }
+
+        System.out.println("\nConsumers Summary:");
+        System.out.println("----------------------------------------------");
+        System.out.printf("%-15s %15s %15s %10s%n", "Consumer", "Allocated", "Demand", "Priority");
+        System.out.println("----------------------------------------------");
+
+        // Print consumers
+        List<EnergyNode> consumers = graph.getNodesByType(NodeType.CONSUMER);
+        consumers.sort((a, b) -> {
+            if (a instanceof EnergyConsumer && b instanceof EnergyConsumer) {
+                EnergyConsumer c1 = (EnergyConsumer) a;
+                EnergyConsumer c2 = (EnergyConsumer) b;
+                if (c1.getPriority() != c2.getPriority()) {
+                    return Integer.compare(c1.getPriority(), c2.getPriority());
+                }
+            }
+            return a.getId().compareTo(b.getId());
+        });
+
+        for (EnergyNode node : consumers) {
+            if (node instanceof EnergyConsumer) {
+                EnergyConsumer consumer = (EnergyConsumer) node;
+                System.out.printf("%-15s %15.2f %15.2f %10d%n",
+                        consumer.getId(),
+                        consumer.getAllocatedEnergy(),
+                        consumer.getDemand(),
+                        consumer.getPriority());
+            }
+        }
+
+        System.out.println("======================================");
     }
 }
