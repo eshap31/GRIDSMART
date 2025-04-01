@@ -1,5 +1,7 @@
-package com.example.gridsmart.graph;
+package com.example.gridsmart.offline;
 
+import com.example.gridsmart.graph.Graph;
+import com.example.gridsmart.graph.GraphEdge;
 import com.example.gridsmart.model.*;
 import com.example.gridsmart.util.EnergyConsumerQueue;
 import java.util.*;

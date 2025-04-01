@@ -2,6 +2,8 @@ package com.example.gridsmart.demo;
 
 import com.example.gridsmart.graph.*;
 import com.example.gridsmart.model.*;
+import com.example.gridsmart.offline.GlobalAllocationAlgorithm;
+
 import java.util.*;
 
 /**

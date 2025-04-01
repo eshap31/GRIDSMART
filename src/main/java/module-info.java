@@ -21,4 +21,6 @@ module com.example.gridsmart {
     opens com.example.gridsmart.util to javafx.fxml;
     exports com.example.gridsmart.demo;
     opens com.example.gridsmart.demo to javafx.fxml;
+    exports com.example.gridsmart.offline;
+    opens com.example.gridsmart.offline to javafx.fxml;
 }
