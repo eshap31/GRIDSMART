@@ -1,7 +1,6 @@
-package com.example.gridsmart.demo;
+package com.example.gridsmart.tests;
 
 import com.example.gridsmart.dynamic.DynamicReallocationManager;
-import com.example.gridsmart.events.EventHandler;
 import com.example.gridsmart.events.EventSimulator;
 import com.example.gridsmart.graph.EnergyAllocationManager;
 import com.example.gridsmart.graph.Graph;

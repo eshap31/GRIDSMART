@@ -1,4 +1,4 @@
-package com.example.gridsmart.demo;
+package com.example.gridsmart.tests;
 
 import com.example.gridsmart.DB.*;
 import com.example.gridsmart.model.*;
