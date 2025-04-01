@@ -13,10 +13,13 @@ public class GreedyReallocator {
     private final EnergyConsumerQueue consumerQueue;
     private final EnergySourceQueue sourceQueue;
 
-    public GreedyReallocator(EnergyAllocationManager allocationManager, EnergyConsumerQueue consumerQueue, EnergySourceQueue sourceQueue) {
+    private final SelectiveDeallocator selectiveDeallocator;
+
+    public GreedyReallocator(EnergyAllocationManager allocationManager, EnergyConsumerQueue consumerQueue, EnergySourceQueue sourceQueue, SelectiveDeallocator selectiveDeallocator) {
         this.allocationManager = allocationManager;
         this.consumerQueue = consumerQueue;
         this.sourceQueue = sourceQueue;
+        this.selectiveDeallocator = selectiveDeallocator;
     }
 
     // reallocate energy to the affected consumers
@@ -38,30 +41,35 @@ public class GreedyReallocator {
             // get the remaining energy needed
             double energyNeeded = consumer.getRemainingDemand();
 
-            if (energyNeeded <= 0) {
-                // consumer is already satisfied
+            if (energyNeeded > 0)
+            {
+                System.out.println("Reallocating for consumer " + consumer.getId() +
+                        " (priority " + consumer.getPriority() +
+                        ") - Needs " + energyNeeded + " energy");
+
+                // try to allocate energy to this consumer from available sources
+                double allocatedInThisRound = allocateEnergyToConsumer(consumer, energyNeeded);
+
+                // check if consumer was fully satisfied
+                if (Math.abs(consumer.getRemainingDemand()) < 0.001) {
+                    reallocatedConsumers++;
+                    System.out.println("Consumer " + consumer.getId() + " fully satisfied");
+                }
+                else {
+                    System.out.println("Consumer " + consumer.getId() +
+                            " partially satisfied - still needs " +
+                            consumer.getRemainingDemand() + " energy");
+                }
+            }
+
+            else
+            {
                 reallocatedConsumers++;
-                continue;
             }
 
-            System.out.println("Reallocating for consumer " + consumer.getId() +
-                    " (priority " + consumer.getPriority() +
-                    ") - Needs " + energyNeeded + " energy");
-
-            // try to allocate energy to this consumer from available sources
-            double allocatedInThisRound = allocateEnergyToConsumer(consumer, energyNeeded);
-
-            // check if consumer was fully satisfied
-            if (Math.abs(consumer.getRemainingDemand()) < 0.001) {
-                reallocatedConsumers++;
-                System.out.println("Consumer " + consumer.getId() + " fully satisfied");
-            }
-            else {
-                System.out.println("Consumer " + consumer.getId() +
-                        " partially satisfied - still needs " +
-                        consumer.getRemainingDemand() + " energy");
-            }
         }
+
+
 
         return reallocatedConsumers;
     }
@@ -109,6 +117,60 @@ public class GreedyReallocator {
             }
 
         }
+
+        // Check if we've fully satisfied the consumer
+        double remainingNeeded = energyNeeded - totalAllocated;
+        // if consumers still needs energy and is of high priority (2 or 1)
+        if(remainingNeeded > 0 && consumer.getPriority() <=2)
+        {
+            System.out.println("Greedy allocation insufficient for high-priority consumer " +
+                    consumer.getId() + ". Attempting selective deallocation.");
+
+            // try to deallocate energy from lower priority consumers
+            double deallocatedEnergy = selectiveDeallocator.deallocateEnergy(consumer, remainingNeeded);
+
+            if (deallocatedEnergy > 0) {
+                // reattempt allocation with newly available energy
+                System.out.println("Freed up " + deallocatedEnergy +
+                        " energy through deallocation. Reallocating to " + consumer.getId());
+
+                // create a new queue with sources that now have available energy
+                tempSourceQueue = new EnergySourceQueue();
+                for(EnergySource source : sourceQueue) {
+                    if(source.isActive() && source.getAvailableEnergy() > 0) {
+                        tempSourceQueue.add(source);
+                    }
+                }
+
+                // try to allocate the newly available energy
+                double additionalAllocated = 0;
+                double additionalNeeded = remainingNeeded;
+
+                while(!tempSourceQueue.isEmpty() && additionalNeeded > 0) {
+                    // get the source with the most available energy
+                    EnergySource source = tempSourceQueue.pollHighestEnergySource();
+
+                    if(source.isActive()) {
+                        double availableEnergy = source.getAvailableEnergy();
+                        if(availableEnergy > 0) {
+                            double toAllocate = Math.min(availableEnergy, additionalNeeded);
+
+                            System.out.println("  Allocating " + toAllocate +
+                                    " deallocated energy from source " +
+                                    source.getId() + " to consumer " + consumer.getId());
+
+                            allocationManager.addAllocation(consumer, source, toAllocate);
+
+                            additionalAllocated += toAllocate;
+                            additionalNeeded -= toAllocate;
+                        }
+                    }
+                }
+
+                totalAllocated += additionalAllocated;
+            }
+        }
+
 
         return totalAllocated;
     }

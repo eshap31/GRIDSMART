@@ -19,22 +19,30 @@ public class DynamicReallocationManager implements EventHandler{
     private final EnergySourceQueue sourceQueue;
 
     private final GreedyReallocator greedyReallocator;
+    private final SelectiveDeallocator selectiveDeallocator;
+
 
     // Statistics tracking
     private int eventsProcessed = 0;
     private int successfulReallocations = 0;
 
+    // Update constructor
     public DynamicReallocationManager(Graph graph, EnergyAllocationManager allocationManager) {
         this.graph = graph;
         this.allocationManager = allocationManager;
 
-        // initialize queues from the current graph state
+        // Initialize queues from the current graph state
         this.consumerQueue = EnergyConsumerQueue.fromGraph(graph);
         this.sourceQueue = EnergySourceQueue.fromGraph(graph);
 
+        // create selective deallocator with 15% disturbance budget
+        this.selectiveDeallocator = new SelectiveDeallocator(allocationManager, 0.15);
+
         System.out.println("DynamicReallocationManager initialized");
 
-        this.greedyReallocator = new GreedyReallocator(allocationManager, consumerQueue, sourceQueue);
+        // Pass selective deallocator to greedy reallocator
+        this.greedyReallocator = new GreedyReallocator(
+                allocationManager, consumerQueue, sourceQueue, selectiveDeallocator);
     }
 
     @Override
@@ -184,6 +192,10 @@ public class DynamicReallocationManager implements EventHandler{
 
     public int getSuccessfulReallocations() {
         return successfulReallocations;
+    }
+
+    public GreedyReallocator getGreedyReallocator() {
+        return greedyReallocator;
     }
 
     public void printStatistics() {
