@@ -10,6 +10,7 @@ module com.example.gridsmart {
     requires org.kordamp.bootstrapfx.core;
     requires eu.hansolo.tilesfx;
     requires com.almasb.fxgl.all;
+    requires java.sql;
 
     exports com.example.gridsmart.ui;
     opens com.example.gridsmart.ui to javafx.fxml;

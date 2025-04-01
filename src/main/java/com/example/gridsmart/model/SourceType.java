@@ -8,6 +8,9 @@ public enum SourceType {
     WIND,
     HYDRO,
     NUCLEAR,
-    FOSSIL_FUEL,
+    COAL,
+    NATURAL_GAS,
+    GEOTHERMAL,
+    BIOMASS,
     BATTERY
 }
