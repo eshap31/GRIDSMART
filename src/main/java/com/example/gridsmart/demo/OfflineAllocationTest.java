@@ -9,7 +9,7 @@ import java.util.*;
  * Creates a sample network, runs the global allocation algorithm,
  * and displays the results.
  */
-public class GraphBasedAllocationDemo {
+public class OfflineAllocationTest {
     public static void main(String[] args) {
         // Create sources
         EnergySource s1 = new EnergySource("S1", 300, SourceType.SOLAR);
