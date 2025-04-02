@@ -283,4 +283,14 @@ public class MasterController
     public Graph getGraph() {
         return this.graph;
     }
+
+    /**
+     * Set a custom event handler
+     * This allows the UI to receive events directly
+     */
+    public void setEventHandler(EventHandler handler) {
+        if (eventSimulator != null) {
+            eventSimulator.setEventHandler(handler);
+        }
+    }
 }

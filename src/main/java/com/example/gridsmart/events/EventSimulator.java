@@ -52,7 +52,7 @@ public class EventSimulator {
                     dispatchEvent(event);
                 }
             }
-        }, 0, frequency);
+        }, 5000, frequency);
     }
 
     // stop generating events
