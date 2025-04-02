@@ -235,4 +235,52 @@ public class MasterController
             System.out.println("Reallocation manager not initialized.");
         }
     }
+
+    /**
+     * Gets the EnergyAllocationManager instance
+     * @return the allocation manager
+     */
+    public EnergyAllocationManager getAllocationManager() {
+        return this.allocationManager;
+    }
+
+    /**
+     * Gets the dynamic reallocation manager
+     * @return the reallocation manager
+     */
+    public DynamicReallocationManager getReallocationManager() {
+        return this.reallocationManager;
+    }
+
+    /**
+     * Gets the event simulator
+     * @return the event simulator
+     */
+    public EventSimulator getEventSimulator() {
+        return this.eventSimulator;
+    }
+
+    /**
+     * Gets the sources list
+     * @return list of energy sources
+     */
+    public List<EnergySource> getSources() {
+        return this.sources;
+    }
+
+    /**
+     * Gets the consumers list
+     * @return list of energy consumers
+     */
+    public List<EnergyConsumer> getConsumers() {
+        return this.consumers;
+    }
+
+    /**
+     * Gets the graph
+     * @return the energy grid graph
+     */
+    public Graph getGraph() {
+        return this.graph;
+    }
 }
