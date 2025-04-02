@@ -1,12 +1,17 @@
 package com.example.gridsmart.ui;
 
 import com.example.gridsmart.graph.Allocation;
+import com.example.gridsmart.graph.EnergyAllocationManager;
+import com.example.gridsmart.graph.Graph;
 import com.example.gridsmart.model.EnergyConsumer;
 import com.example.gridsmart.model.EnergySource;
+import com.example.gridsmart.model.SourceType;
+import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Group;
+import javafx.scene.Scene;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.*;
@@ -16,14 +21,15 @@ import javafx.scene.shape.Line;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
+import javafx.stage.Stage;
 
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Visualization component for displaying energy grid allocations
+ * Standalone visualization app that creates its own test data directly
  */
-public class GridVisualizationView extends BorderPane {
+public class DirectVisualizationApp extends Application {
 
     // Constants for node display
     private static final double SOURCE_RADIUS = 30;
@@ -36,15 +42,20 @@ public class GridVisualizationView extends BorderPane {
     private final Map<String, StackPane> consumerNodes = new HashMap<>();
     private final Map<String, Map<String, Line>> allocationLines = new HashMap<>();
 
-    // Container for all grid elements (sources, consumers, lines)
+    // Container for all grid elements
     private final Group gridGroup = new Group();
     private final VBox eventLogContainer = new VBox(10);
     private final ScrollPane scrollPane = new ScrollPane(gridGroup);
 
-    /**
-     * Create a new grid visualization
-     */
-    public GridVisualizationView() {
+    // Data models
+    private Graph graph;
+    private EnergyAllocationManager allocationManager;
+
+    @Override
+    public void start(Stage primaryStage) {
+        // Create the main layout
+        BorderPane root = new BorderPane();
+
         // Set up scrolling container for the grid
         scrollPane.setPannable(true);
         scrollPane.setFitToWidth(true);
@@ -61,30 +72,90 @@ public class GridVisualizationView extends BorderPane {
         eventBox.setPrefHeight(150);
 
         // Set up the main layout
-        setCenter(scrollPane);
-        setBottom(eventBox);
+        root.setCenter(scrollPane);
+        root.setBottom(eventBox);
+
+        // Create a scene with the grid view
+        Scene scene = new Scene(root, 900, 700);
+
+        // Configure the main stage
+        primaryStage.setTitle("GridSmart Energy Allocation System");
+        primaryStage.setScene(scene);
+        primaryStage.show();
+
+        // Create test data in a background thread
+        new Thread(() -> {
+            try {
+                createTestData();
+                Platform.runLater(() -> {
+                    updateVisualization();
+                    logEvent("Test data created and displayed successfully");
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
+                Platform.runLater(() -> logEvent("Error: " + e.getMessage()));
+            }
+        }).start();
     }
 
     /**
-     * Clear the visualization of all nodes and connections
+     * Create test data directly
      */
-    public void clearVisualization() {
-        Platform.runLater(() -> {
-            gridGroup.getChildren().clear();
-            sourceNodes.clear();
-            consumerNodes.clear();
-            allocationLines.clear();
-        });
+    private void createTestData() {
+        System.out.println("Creating test data...");
+
+        // Create a new graph
+        graph = new Graph();
+
+        // Create energy sources with different capacities
+        EnergySource solar1 = new EnergySource("solar1", 800, SourceType.SOLAR);
+        EnergySource wind1 = new EnergySource("wind1", 600, SourceType.WIND);
+        EnergySource hydro1 = new EnergySource("hydro1", 1200, SourceType.HYDRO);
+
+        // Add sources to graph
+        graph.addNode(solar1);
+        graph.addNode(wind1);
+        graph.addNode(hydro1);
+
+        // Create consumers with different priorities and demands
+        EnergyConsumer hospital = new EnergyConsumer("hospital", 1, 700);
+        EnergyConsumer fireStation = new EnergyConsumer("fireStation", 1, 300);
+        EnergyConsumer school = new EnergyConsumer("school", 3, 400);
+        EnergyConsumer mall = new EnergyConsumer("mall", 4, 600);
+
+        // Add consumers to graph
+        graph.addNode(hospital);
+        graph.addNode(fireStation);
+        graph.addNode(school);
+        graph.addNode(mall);
+
+        // Create allocation manager
+        allocationManager = new EnergyAllocationManager(graph);
+
+        // Set up initial allocations
+        allocationManager.addAllocation(hospital, hydro1, 700);
+        allocationManager.addAllocation(fireStation, wind1, 300);
+        allocationManager.addAllocation(school, solar1, 400);
+        allocationManager.addAllocation(mall, solar1, 400);
+
+        System.out.println("Test data created successfully.");
+        System.out.println("Sources: " + allocationManager.getAllSources().size());
+        System.out.println("Consumers: " + allocationManager.getAllConsumers().size());
     }
 
     /**
-     * Update the visualization with current sources, consumers, and allocations
+     * Update the visualization with current data
      */
-    public void updateVisualization(Map<String, EnergySource> sources,
-                                    Map<String, EnergyConsumer> consumers,
-                                    Map<EnergyConsumer, Map<EnergySource, Allocation>> allocations) {
-        Platform.runLater(() -> {
+    private void updateVisualization() {
+        try {
             clearVisualization();
+
+            // Get data from allocation manager
+            Map<String, EnergySource> sources = allocationManager.getAllSources();
+            Map<String, EnergyConsumer> consumers = allocationManager.getAllConsumers();
+
+            System.out.println("Updating visualization with " + sources.size() +
+                    " sources and " + consumers.size() + " consumers");
 
             // Create source nodes on the left side
             int sourceIndex = 0;
@@ -111,40 +182,36 @@ public class GridVisualizationView extends BorderPane {
             }
 
             // Draw allocation lines
-            for (Map.Entry<EnergyConsumer, Map<EnergySource, Allocation>> entry : allocations.entrySet()) {
-                EnergyConsumer consumer = entry.getKey();
-                Map<EnergySource, Allocation> sourceAllocations = entry.getValue();
+            for (EnergyConsumer consumer : consumers.values()) {
+                Map<EnergySource, Allocation> consumerAllocations =
+                        allocationManager.getAllocationsForConsumer(consumer);
 
-                for (Map.Entry<EnergySource, Allocation> sourceEntry : sourceAllocations.entrySet()) {
-                    EnergySource source = sourceEntry.getKey();
-                    Allocation allocation = sourceEntry.getValue();
+                if (consumerAllocations != null) {
+                    for (Map.Entry<EnergySource, Allocation> entry : consumerAllocations.entrySet()) {
+                        EnergySource source = entry.getKey();
+                        Allocation allocation = entry.getValue();
 
-                    if (allocation.getAllocatedEnergy() > 0) {
-                        createAllocationLine(source, consumer, allocation);
+                        if (allocation != null && allocation.getAllocatedEnergy() > 0) {
+                            createAllocationLine(source, consumer, allocation);
+                        }
                     }
                 }
             }
-        });
+        } catch (Exception e) {
+            System.out.println("Error in updateVisualization: " + e.getMessage());
+            e.printStackTrace();
+            logEvent("Error updating visualization: " + e.getMessage());
+        }
     }
 
     /**
-     * Log an event to the event display area
+     * Clear the visualization of all nodes and connections
      */
-    public void logEvent(String eventDescription) {
-        Platform.runLater(() -> {
-            // Create event display
-            Label eventLabel = new Label(eventDescription);
-            eventLabel.setTextFill(Color.RED);
-            eventLabel.setWrapText(true);
-
-            // Add to top of log (newest first)
-            eventLogContainer.getChildren().add(0, eventLabel);
-
-            // Keep log size manageable
-            if (eventLogContainer.getChildren().size() > 10) {
-                eventLogContainer.getChildren().remove(eventLogContainer.getChildren().size() - 1);
-            }
-        });
+    private void clearVisualization() {
+        gridGroup.getChildren().clear();
+        sourceNodes.clear();
+        consumerNodes.clear();
+        allocationLines.clear();
     }
 
     /**
@@ -233,6 +300,7 @@ public class GridVisualizationView extends BorderPane {
         StackPane consumerNode = consumerNodes.get(consumer.getId());
 
         if (sourceNode == null || consumerNode == null) {
+            System.out.println("Warning: Cannot create allocation line - nodes not found");
             return;
         }
 
@@ -257,5 +325,29 @@ public class GridVisualizationView extends BorderPane {
 
         // Add elements to grid
         gridGroup.getChildren().addAll(line, allocationText);
+    }
+
+    /**
+     * Log an event to the event display area
+     */
+    private void logEvent(String eventDescription) {
+        Label eventLabel = new Label(eventDescription);
+        eventLabel.setTextFill(Color.RED);
+        eventLabel.setWrapText(true);
+
+        // Add to top of log (newest first)
+        eventLogContainer.getChildren().add(0, eventLabel);
+
+        // Keep log size manageable
+        if (eventLogContainer.getChildren().size() > 10) {
+            eventLogContainer.getChildren().remove(eventLogContainer.getChildren().size() - 1);
+        }
+    }
+
+    /**
+     * Main method to launch the application
+     */
+    public static void main(String[] args) {
+        launch(args);
     }
 }

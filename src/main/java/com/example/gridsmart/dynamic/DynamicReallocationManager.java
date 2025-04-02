@@ -114,8 +114,30 @@ public class DynamicReallocationManager implements EventHandler{
         // now handle the allocations
         // this automatically updates allocation maps
         for (EnergyConsumer consumer : consumersToReallocate) {
+            double beforeAllocated = consumer.getAllocatedEnergy();
+            double beforeRemaining = consumer.getRemainingDemand();
+
+            Allocation allocation = this.allocationManager.getAllocation(consumer, source);
+            double allocationAmount = (allocation != null) ? allocation.getAllocatedEnergy() : 0;
+
+            System.out.println("Consumer " + consumer.getId() +
+                    " - Before: allocated=" + beforeAllocated +
+                    ", remaining=" + beforeRemaining +
+                    ", allocation amount=" + allocationAmount);
+
             this.allocationManager.removeAllocation(consumer, source);
+
+            double afterAllocated = consumer.getAllocatedEnergy();
+            double afterRemaining = consumer.getRemainingDemand();
+
+            System.out.println("Consumer " + consumer.getId() +
+                    " - After: allocated=" + afterAllocated +
+                    ", remaining=" + afterRemaining);
         }
+
+
+        // Ensure source is completely removed from the allocation manager
+        allocationManager.removeSourceCompletely(source);
 
         // update the queues
         consumerQueue.updateFromGraph(graph);
@@ -131,6 +153,8 @@ public class DynamicReallocationManager implements EventHandler{
 
         System.out.println("Reallocation complete. " + satisfiedConsumers +
                 " out of " + consumersToReallocate.size() + " consumers fully satisfied");
+
+        printAllocationStatus();
 
         successfulReallocations++;
     }
@@ -202,5 +226,77 @@ public class DynamicReallocationManager implements EventHandler{
         System.out.println("===== Dynamic Reallocation Statistics =====");
         System.out.println("Events processed: " + eventsProcessed);
         System.out.println("Successful reallocations: " + successfulReallocations);
+    }
+
+    public void printAllocationStatus() {
+        System.out.println("\n\n\n----- Allocation -----");
+        // Print allocations for each consumer
+        System.out.println("\n----- Consumer Allocations from EnergyAllocationManager -----");
+        Map<String, EnergyConsumer> allConsumers = allocationManager.getAllConsumers();
+
+        for (EnergyConsumer consumer : allConsumers.values()) {
+            System.out.printf("Consumer %s (Priority %d, Demand %.2f):%n",
+                    consumer.getId(), consumer.getPriority(), consumer.getDemand());
+
+            Map<EnergySource, Allocation> allocations = allocationManager.getAllocationsForConsumer(consumer);
+
+            if (allocations.isEmpty()) {
+                System.out.println("  No allocations");
+            } else {
+                double totalAllocation = 0;
+
+                for (Map.Entry<EnergySource, Allocation> entry : allocations.entrySet()) {
+                    EnergySource source = entry.getKey();
+                    Allocation allocation = entry.getValue();
+                    double amount = allocation.getAllocatedEnergy();
+
+                    System.out.printf("  From %s (%s): %.2f%n",
+                            source.getId(), source.getType(), amount);
+
+                    totalAllocation += amount;
+                }
+
+                double fulfillmentPercentage = (consumer.getDemand() > 0) ?
+                        (totalAllocation / consumer.getDemand()) * 100.0 : 0.0;
+
+                System.out.printf("  Total allocated: %.2f / %.2f (%.2f%%)%n",
+                        totalAllocation, consumer.getDemand(), fulfillmentPercentage);
+            }
+        }
+
+        // Print allocations for each source
+        System.out.println("\n----- Source Allocations from EnergyAllocationManager -----");
+        Map<String, EnergySource> allSources = allocationManager.getAllSources();
+
+        for (EnergySource source : allSources.values()) {
+            System.out.printf("Source %s (%s, Capacity %.2f):%n",
+                    source.getId(), source.getType(), source.getCapacity());
+
+            Map<EnergyConsumer, Allocation> allocations = allocationManager.getAllocationsForSource(source);
+
+            if (allocations.isEmpty()) {
+                System.out.println("  No consumers allocated");
+            } else {
+                double totalAllocated = 0;
+
+                for (Map.Entry<EnergyConsumer, Allocation> entry : allocations.entrySet()) {
+                    EnergyConsumer consumer = entry.getKey();
+                    Allocation allocation = entry.getValue();
+                    double amount = allocation.getAllocatedEnergy();
+
+                    System.out.printf("  To %s (Priority %d): %.2f%n",
+                            consumer.getId(), consumer.getPriority(), amount);
+
+                    totalAllocated += amount;
+                }
+
+                double utilizationPercentage = (source.getCapacity() > 0) ?
+                        (totalAllocated / source.getCapacity()) * 100.0 : 0.0;
+
+                System.out.printf("  Total allocated: %.2f / %.2f (%.2f%%)%n",
+                        totalAllocated, source.getCapacity(), utilizationPercentage);
+            }
+        }
+        System.out.println("\n\n\n----- Finished printing Allocations -----");
     }
 }

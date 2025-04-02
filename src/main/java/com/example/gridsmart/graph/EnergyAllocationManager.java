@@ -6,6 +6,7 @@ import com.example.gridsmart.model.EnergySource;
 import com.example.gridsmart.model.NodeType;
 import com.example.gridsmart.offline.GlobalAllocationAlgorithm;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -446,5 +447,38 @@ public class EnergyAllocationManager {
 
         // Update allocations from the flow graph
         return updateFromFlowGraph(flowGraph);
+    }
+
+    /**
+     * Completely removes a source from the allocation manager.
+     * This ensures the source is removed from all internal data structures.
+     * @param source The energy source to remove
+     */
+    public void removeSourceCompletely(EnergySource source) {
+        if (source == null) {
+            return;
+        }
+
+        // First, remove all allocations involving this source
+        Map<EnergyConsumer, Allocation> consumersMap = reverseAllocationMap.getAllocations(source);
+        if (!consumersMap.isEmpty()) {
+            // Create a copy to avoid concurrent modification
+            List<EnergyConsumer> affectedConsumers = new ArrayList<>(consumersMap.keySet());
+
+            // Remove allocations for each consumer
+            for (EnergyConsumer consumer : affectedConsumers) {
+                removeAllocation(consumer, source);
+            }
+        }
+
+        // Make sure the source is removed from the reverse allocation map
+        reverseAllocationMap.remove(source);
+
+        // If the source is still in the graph, remove it
+        if (graph.getNode(source.getId()) != null) {
+            graph.removeNode(source.getId());
+        }
+
+        System.out.println("Source " + source.getId() + " completely removed from allocation manager");
     }
 }

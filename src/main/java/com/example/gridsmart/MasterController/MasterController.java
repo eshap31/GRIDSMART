@@ -241,8 +241,17 @@ public class MasterController
      * @return the allocation manager
      */
     public EnergyAllocationManager getAllocationManager() {
-        return this.allocationManager;
+        // Ensure allocationManager is initialized before returning
+        if (allocationManager == null) {
+            System.out.println("WARNING: getAllocationManager() called but allocationManager is null");
+            if (graph != null) {
+                System.out.println("Creating new EnergyAllocationManager with existing graph");
+                allocationManager = new EnergyAllocationManager(graph);
+            }
+        }
+        return allocationManager;
     }
+
 
     /**
      * Gets the dynamic reallocation manager
@@ -284,13 +293,11 @@ public class MasterController
         return this.graph;
     }
 
-    /**
-     * Set a custom event handler
-     * This allows the UI to receive events directly
-     */
     public void setEventHandler(EventHandler handler) {
         if (eventSimulator != null) {
             eventSimulator.setEventHandler(handler);
+        } else {
+            System.out.println("WARNING: eventSimulator is null in setEventHandler()");
         }
     }
 }

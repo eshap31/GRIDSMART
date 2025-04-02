@@ -26,6 +26,8 @@ public class GreedyReallocator {
     public int reallocate(List<EnergyConsumer> consumersToReallocate) {
         int reallocatedConsumers = 0;
 
+        System.out.println("amount of consumers to reallocate: " + consumersToReallocate.size());
+
         // sort consumers in consumerToReallocate by priority
         // use heap sort
         EnergyConsumerQueue tempQueue = new EnergyConsumerQueue();
@@ -41,6 +43,8 @@ public class GreedyReallocator {
             // get the remaining energy needed
             double energyNeeded = consumer.getRemainingDemand();
 
+            System.out.println("Consumer " + consumer.getId() + " needs " + energyNeeded + " energy");
+
             if (energyNeeded > 0)
             {
                 System.out.println("Reallocating for consumer " + consumer.getId() +
@@ -49,6 +53,8 @@ public class GreedyReallocator {
 
                 // try to allocate energy to this consumer from available sources
                 double allocatedInThisRound = allocateEnergyToConsumer(consumer, energyNeeded);
+
+                System.out.println("Allocated " + allocatedInThisRound + " energy to consumer " + consumer.getId());
 
                 // check if consumer was fully satisfied
                 if (Math.abs(consumer.getRemainingDemand()) < 0.001) {
@@ -77,6 +83,8 @@ public class GreedyReallocator {
     // allocate energy to the consumer from available sources
     public double allocateEnergyToConsumer(EnergyConsumer consumer, double energyNeeded)
     {
+        System.out.println("amount of energy needed: " + energyNeeded);
+
         double totalAllocated = 0;
 
         // create temporary queue of the energy sources that could allocate energy

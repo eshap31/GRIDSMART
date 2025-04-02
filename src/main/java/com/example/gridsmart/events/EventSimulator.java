@@ -117,6 +117,7 @@ public class EventSimulator {
         // get all the sources in the graph
         List<EnergyNode> sources = graph.getNodesByType(NodeType.SOURCE);
         if (sources.isEmpty()) {
+            System.out.println("No sources to fail");
             return null; // No sources to fail
         }
 
