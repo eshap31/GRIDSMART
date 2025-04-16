@@ -14,9 +14,6 @@ import java.util.*;
  */
 public class GlobalAllocationAlgorithm
 {
-    // Storage for allocations from each source to each consumer
-    private Map<String, Map<String, Double>> allocationStore = new HashMap<>();
-
     // Energy allocation manager to store and manage allocations
     private EnergyAllocationManager allocationManager;
 
@@ -26,10 +23,6 @@ public class GlobalAllocationAlgorithm
 
     public GlobalAllocationAlgorithm(EnergyAllocationManager allocationManager) {
         this.allocationManager = allocationManager;
-    }
-
-    public Map<String, Map<String, Double>> getAllocationStore() {
-        return allocationStore;
     }
 
     public EnergyAllocationManager getAllocationManager() {
@@ -43,9 +36,6 @@ public class GlobalAllocationAlgorithm
      * sources - List of energy sources
      */
     public void run(Graph graph, List<EnergyConsumer> consumers, List<EnergySource> sources) {
-        // Initialize allocation storage
-        allocationStore.clear();
-
         // Clear existing allocations in the manager
         for (EnergyConsumer consumer : consumers) {
             allocationManager.removeAllocationsForConsumer(consumer);
@@ -89,64 +79,8 @@ public class GlobalAllocationAlgorithm
 
         graph.removeNode(superSource.getId());
 
-        // After all priority levels are processed, update the EnergyAllocationManager with our allocations
-        createDetailedAllocations(consumers, sources);
-
         // Build the energy allocation manager's graph from the allocations we've created
         allocationManager.buildGraphFromAllocations();
-    }
-
-    /**
-     * Creates detailed allocations from stored allocation data
-     * This uses the EnergyAllocationManager to store allocations
-     */
-    private void createDetailedAllocations(List<EnergyConsumer> consumers, List<EnergySource> sources) {
-        System.out.println("\n===== Creating Detailed Allocations =====");
-
-        // First ensure the allocation manager has a clean slate
-        for (EnergyConsumer consumer : consumers) {
-            allocationManager.removeAllocationsForConsumer(consumer);
-        }
-
-        // Create a map for quick lookup of sources by ID
-        Map<String, EnergySource> sourceMap = new HashMap<>();
-        for (EnergySource source : sources) {
-            sourceMap.put(source.getId(), source);
-        }
-
-        // For each consumer, create allocations from each source
-        for (EnergyConsumer consumer : consumers) {
-            String consumerId = consumer.getId();
-
-            if (allocationStore.containsKey(consumerId)) {
-                Map<String, Double> sourceAllocations = allocationStore.get(consumerId);
-
-                System.out.println("Consumer " + consumerId + " (Priority " + consumer.getPriority() +
-                        ", Demand " + consumer.getDemand() + "):");
-
-                if (sourceAllocations.isEmpty()) {
-                    System.out.println("  No allocations");
-                } else {
-                    for (Map.Entry<String, Double> entry : sourceAllocations.entrySet()) {
-                        String sourceId = entry.getKey();
-                        double allocation = entry.getValue();
-
-                        EnergySource source = sourceMap.get(sourceId);
-                        if (source != null) {
-                            System.out.println("  From " + sourceId + ": " + allocation);
-
-                            // Add this allocation to the allocation manager
-                            // Don't update consumer/source states - they're already set
-                            allocationManager.addAllocation(consumer, source, allocation);
-                        }
-                    }
-                }
-            } else {
-                System.out.println("Consumer " + consumerId + " (Priority " + consumer.getPriority() +
-                        ", Demand " + consumer.getDemand() + "):");
-                System.out.println("  No allocations");
-            }
-        }
     }
 
     // groups consumers by priority
@@ -236,22 +170,34 @@ public class GlobalAllocationAlgorithm
         // 6. Run the Edmonds-Karp algorithm for this priority level
         runEdmondsKarp(graph, superSource, superSink);
 
-        // 7. Calculate and store the new allocations for this priority level
-        // Create a map to store the allocations for this priority level
-        Map<String, Map<String, Double>> newAllocations = new HashMap<>();
-
+        // 7. Calculate the new allocations for this priority level
+        // and directly update the allocation manager
         for (EnergyConsumer consumer : priorityConsumers) {
             if (graph.getNode(consumer.getId()) != null) {
                 String consumerId = consumer.getId();
-                newAllocations.put(consumerId, new HashMap<>());
 
-                // Sum up all incoming flows from sources
+                // Process each incoming edge from a source
                 for (GraphEdge edge : graph.getIncomingEdges(consumer.getId())) {
                     if (edge.getSource().getNodeType() == NodeType.SOURCE) {
                         String sourceId = edge.getSource().getId();
                         double flow = edge.getFlow();
+
                         if (flow > 0) {
-                            newAllocations.get(consumerId).put(sourceId, flow);
+                            // Find the EnergySource object
+                            EnergySource source = null;
+                            for (EnergySource s : sources) {
+                                if (s.getId().equals(sourceId)) {
+                                    source = s;
+                                    break;
+                                }
+                            }
+
+                            if (source != null) {
+                                // Add allocation directly to the allocation manager
+                                allocationManager.addAllocation(consumer, source, flow);
+                                System.out.println("Consumer " + consumerId + " allocated " + flow +
+                                        " from Source " + sourceId);
+                            }
                         }
                     }
                 }
@@ -260,19 +206,19 @@ public class GlobalAllocationAlgorithm
 
         // 8. Update consumer allocations based on the calculated flows
         for (EnergyConsumer consumer : priorityConsumers) {
-            String consumerId = consumer.getId();
-            if (newAllocations.containsKey(consumerId)) {
-                double totalFlow = 0;
-                for (double flow : newAllocations.get(consumerId).values()) {
-                    totalFlow += flow;
-                }
+            double totalFlow = 0;
 
-                if (totalFlow > 0) {
-                    // This updates the consumer's allocated energy
-                    consumer.setAllocatedEnergy(totalFlow);
-                    System.out.println("Consumer " + consumerId + " allocated: " + totalFlow +
-                            " (demand: " + consumer.getDemand() + ")");
+            for (GraphEdge edge : graph.getIncomingEdges(consumer.getId())) {
+                if (edge.getSource().getNodeType() == NodeType.SOURCE) {
+                    totalFlow += edge.getFlow();
                 }
+            }
+
+            if (totalFlow > 0) {
+                // This updates the consumer's allocated energy
+                consumer.setAllocatedEnergy(totalFlow);
+                System.out.println("Consumer " + consumer.getId() + " allocated: " + totalFlow +
+                        " (demand: " + consumer.getDemand() + ")");
             }
         }
 
@@ -283,9 +229,9 @@ public class GlobalAllocationAlgorithm
             double additionalLoad = 0;
 
             // Calculate total flow from this source to all consumers in this priority level
-            for (Map<String, Double> sourceAllocations : newAllocations.values()) {
-                if (sourceAllocations.containsKey(sourceId)) {
-                    additionalLoad += sourceAllocations.get(sourceId);
+            for (GraphEdge edge : graph.getOutgoingEdges(sourceId)) {
+                if (edge.getTarget().getNodeType() == NodeType.CONSUMER) {
+                    additionalLoad += edge.getFlow();
                 }
             }
 
@@ -300,14 +246,11 @@ public class GlobalAllocationAlgorithm
             }
         }
 
-        // 10. Store the allocations for later retrieval
-        storeAllocations(newAllocations, priorityConsumers, sources);
-
-        // 11. Print the graph state after allocation
+        // 10. Print the graph state after allocation
         System.out.println("Graph after allocation for priority level " + priorityLevel + ":");
         printGraph(graph, "After Allocation");
 
-        // 12. Clean up: Remove all consumer nodes and edges for this priority level
+        // 11. Clean up: Remove all consumer nodes and edges for this priority level
         // First remove edges to super sink
         for (GraphEdge edge : consumerToSinkEdges) {
             graph.removeEdge(edge.getSource().getId(), edge.getTarget().getId());
@@ -324,58 +267,9 @@ public class GlobalAllocationAlgorithm
         // Finally remove the super sink
         graph.removeNode(superSink.getId());
 
-        // 13. Print the graph state after cleanup
+        // 12. Print the graph state after cleanup
         System.out.println("Graph after cleanup for priority level " + priorityLevel + ":");
         printGraph(graph, "After Cleanup");
-    }
-
-    // Store allocations for later retrieval using the EnergyAllocationManager
-    private void storeAllocations(Map<String, Map<String, Double>> allocations,
-                                  List<EnergyConsumer> consumers,
-                                  List<EnergySource> sources) {
-        // Map of consumer ID to source ID to allocation
-        for (EnergyConsumer consumer : consumers) {
-            String consumerId = consumer.getId();
-            if (allocations.containsKey(consumerId)) {
-                Map<String, Double> sourceAllocations = allocations.get(consumerId);
-
-                for (Map.Entry<String, Double> entry : sourceAllocations.entrySet()) {
-                    String sourceId = entry.getKey();
-                    double allocation = entry.getValue();
-
-                    EnergySource source = null;
-                    for (EnergySource s : sources) {
-                        if (s.getId().equals(sourceId)) {
-                            source = s;
-                            break;
-                        }
-                    }
-
-                    if (source != null) {
-                        System.out.println("Stored allocation: Consumer " + consumerId +
-                                " receives " + allocation + " from Source " + sourceId);
-
-                        // Store in our allocation store for backward compatibility
-                        if (!allocationStore.containsKey(consumerId)) {
-                            allocationStore.put(consumerId, new HashMap<>());
-                        }
-
-                        // Add this allocation
-                        if (allocationStore.get(consumerId).containsKey(sourceId)) {
-                            // Add to existing allocation
-                            double existingAllocation = allocationStore.get(consumerId).get(sourceId);
-                            allocationStore.get(consumerId).put(sourceId, existingAllocation + allocation);
-                        } else {
-                            // New allocation
-                            allocationStore.get(consumerId).put(sourceId, allocation);
-                        }
-
-                        // Note: We don't add allocations here because we'll do a complete
-                        // update from the graph at the end of the run method
-                    }
-                }
-            }
-        }
     }
 
     /*
@@ -479,55 +373,6 @@ public class GlobalAllocationAlgorithm
         // Handle consumer to super sink edges
         else if (sourceNode.getNodeType() == NodeType.CONSUMER && targetNode.getNodeType() == NodeType.SUPER_SINK) {
             // Nothing to update here, super sink doesn't have allocation
-        }
-    }
-
-    /*
-     * Updates consumer allocations based on the current flow in the graph.
-     * This method is now used just for display purposes.
-     * The actual allocation is handled in processPriorityLevel.
-     *
-     * graph - The energy network graph with updated flows
-     * consumers - List of consumers to update
-     */
-    private void updateConsumerAllocations(Graph graph, List<EnergyConsumer> consumers) {
-        // We're now handling consumer allocations directly in processPriorityLevel
-        // to keep track of allocations from specific sources.
-        // This method is kept for compatibility but does less work.
-
-        System.out.println("Consumer allocation summary:");
-        for (EnergyConsumer consumer : consumers) {
-            if (graph.getNode(consumer.getId()) != null) {
-                System.out.println("Consumer " + consumer.getId() +
-                        " current allocation: " + consumer.getAllocatedEnergy() +
-                        " / demand: " + consumer.getDemand());
-            }
-        }
-    }
-
-    /*
-     * Updates source loads based on the current flow in the graph.
-     * graph - The energy network graph with updated flows
-     * sources - List of sources to update
-     */
-    private void updateSourceLoads(Graph graph, List<EnergySource> sources) {
-        for (EnergySource source : sources) {
-            // Reset the load before recalculating
-            double previousLoad = source.getCurrentLoad();
-            double totalLoad = 0;
-
-            // Sum up all outgoing flows to consumers that are still in the graph
-            for (GraphEdge edge : graph.getOutgoingEdges(source.getId())) {
-                if (edge.getTarget().getNodeType() == NodeType.CONSUMER) {
-                    totalLoad += edge.getFlow();
-                }
-            }
-
-            // Update the source load
-            source.setCurrentLoad(totalLoad);
-            System.out.println("Source " + source.getId() + " load updated from " +
-                    previousLoad + " to " + totalLoad +
-                    " (capacity: " + source.getCapacity() + ")");
         }
     }
 
