@@ -27,7 +27,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Standalone visualization app that creates its own test data directly
+ * JavaFX application for visualizing the energy grid.
+ * Modified to accept an external EnergyAllocationManager instead of creating test data.
  */
 public class DirectVisualizationApp extends Application {
 
@@ -48,8 +49,18 @@ public class DirectVisualizationApp extends Application {
     private final ScrollPane scrollPane = new ScrollPane(gridGroup);
 
     // Data models
-    private Graph graph;
     private EnergyAllocationManager allocationManager;
+    private VisualController visualController;
+
+    /**
+     * Sets the visual controller that manages this app.
+     * @param visualController The controller that bridges backend and frontend
+     */
+    public void setVisualController(VisualController visualController) {
+        this.visualController = visualController;
+        this.allocationManager = visualController.getAllocationManager();
+        visualController.setVisualizationApp(this);
+    }
 
     @Override
     public void start(Stage primaryStage) {
@@ -83,71 +94,25 @@ public class DirectVisualizationApp extends Application {
         primaryStage.setScene(scene);
         primaryStage.show();
 
-        // Create test data in a background thread
-        new Thread(() -> {
-            try {
-                createTestData();
-                Platform.runLater(() -> {
-                    updateVisualization();
-                    logEvent("Test data created and displayed successfully");
-                });
-            } catch (Exception e) {
-                e.printStackTrace();
-                Platform.runLater(() -> logEvent("Error: " + e.getMessage()));
-            }
-        }).start();
+        // If we have an allocation manager, update the visualization
+        if (allocationManager != null) {
+            updateVisualization();
+            logEvent("System initialized with live data");
+        } else {
+            logEvent("Waiting for system initialization...");
+        }
     }
 
     /**
-     * Create test data directly
+     * Update the visualization with current data from the allocation manager
      */
-    private void createTestData() {
-        System.out.println("Creating test data...");
-
-        // Create a new graph
-        graph = new Graph();
-
-        // Create energy sources with different capacities
-        EnergySource solar1 = new EnergySource("solar1", 800, SourceType.SOLAR);
-        EnergySource wind1 = new EnergySource("wind1", 600, SourceType.WIND);
-        EnergySource hydro1 = new EnergySource("hydro1", 1200, SourceType.HYDRO);
-
-        // Add sources to graph
-        graph.addNode(solar1);
-        graph.addNode(wind1);
-        graph.addNode(hydro1);
-
-        // Create consumers with different priorities and demands
-        EnergyConsumer hospital = new EnergyConsumer("hospital", 1, 700);
-        EnergyConsumer fireStation = new EnergyConsumer("fireStation", 1, 300);
-        EnergyConsumer school = new EnergyConsumer("school", 3, 400);
-        EnergyConsumer mall = new EnergyConsumer("mall", 4, 600);
-
-        // Add consumers to graph
-        graph.addNode(hospital);
-        graph.addNode(fireStation);
-        graph.addNode(school);
-        graph.addNode(mall);
-
-        // Create allocation manager
-        allocationManager = new EnergyAllocationManager(graph);
-
-        // Set up initial allocations
-        allocationManager.addAllocation(hospital, hydro1, 700);
-        allocationManager.addAllocation(fireStation, wind1, 300);
-        allocationManager.addAllocation(school, solar1, 400);
-        allocationManager.addAllocation(mall, solar1, 400);
-
-        System.out.println("Test data created successfully.");
-        System.out.println("Sources: " + allocationManager.getAllSources().size());
-        System.out.println("Consumers: " + allocationManager.getAllConsumers().size());
-    }
-
-    /**
-     * Update the visualization with current data
-     */
-    private void updateVisualization() {
+    public void updateVisualization() {
         try {
+            if (allocationManager == null) {
+                logEvent("Error: No allocation manager available");
+                return;
+            }
+
             clearVisualization();
 
             // Get data from allocation manager
@@ -330,24 +295,19 @@ public class DirectVisualizationApp extends Application {
     /**
      * Log an event to the event display area
      */
-    private void logEvent(String eventDescription) {
+    public void logEvent(String eventDescription) {
         Label eventLabel = new Label(eventDescription);
         eventLabel.setTextFill(Color.RED);
         eventLabel.setWrapText(true);
 
         // Add to top of log (newest first)
-        eventLogContainer.getChildren().add(0, eventLabel);
+        Platform.runLater(() -> {
+            eventLogContainer.getChildren().add(0, eventLabel);
 
-        // Keep log size manageable
-        if (eventLogContainer.getChildren().size() > 10) {
-            eventLogContainer.getChildren().remove(eventLogContainer.getChildren().size() - 1);
-        }
-    }
-
-    /**
-     * Main method to launch the application
-     */
-    public static void main(String[] args) {
-        launch(args);
+            // Keep log size manageable
+            if (eventLogContainer.getChildren().size() > 10) {
+                eventLogContainer.getChildren().remove(eventLogContainer.getChildren().size() - 1);
+            }
+        });
     }
 }
