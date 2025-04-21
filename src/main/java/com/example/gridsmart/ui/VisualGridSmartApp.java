@@ -44,7 +44,7 @@ public class VisualGridSmartApp extends Application {
             // Start event simulation after a short delay to allow UI to initialize
             new Thread(() -> {
                 try {
-                    Thread.sleep(1000);
+                    Thread.sleep(5000);
                     Platform.runLater(() -> {
                         visualController.startEventSimulation();
                     });
