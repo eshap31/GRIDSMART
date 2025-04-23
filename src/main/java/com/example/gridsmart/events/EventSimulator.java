@@ -1,10 +1,7 @@
 package com.example.gridsmart.events;
 
 import com.example.gridsmart.graph.Graph;
-import com.example.gridsmart.model.SourceType;
-import com.example.gridsmart.model.EnergyNode;
-import com.example.gridsmart.model.NodeType;
-import com.example.gridsmart.model.EnergySource;
+import com.example.gridsmart.model.*;
 
 import java.util.*;
 
@@ -104,9 +101,9 @@ public class EventSimulator {
                 return createSourceFailureEvent();
             case SOURCE_ADDED:
                 return createSourceAddedEvent();
+            case CONSUMER_ADDED:
+                return createConsumerAddedEvent();
         /*
-        case CONSUMER_ADDED:
-            return createConsumerAddedEvent();
         case DEMAND_INCREASE:
             return createDemandIncreaseEvent();
         case DEMAND_DECREASE:
@@ -166,6 +163,30 @@ public class EventSimulator {
                 EventType.SOURCE_ADDED,
                 nodes,
                 "New " + sourceType + " source added with " + String.format("%.2f", capacity) + " capacity",
+                System.currentTimeMillis()
+        );
+    }
+
+    private Event createConsumerAddedEvent() {
+        // Generate a unique ID for the new consumer
+        String consumerId = "consumer_" + System.currentTimeMillis();
+
+        // Generate random priority between 1 and 5 (1 is highest)
+        int priority = 1 + random.nextInt(5);
+
+        // Generate random demand between 100 and 800
+        double demand = 100 + random.nextDouble() * 700;
+
+        // Create the new consumer
+        EnergyConsumer newConsumer = new EnergyConsumer(consumerId, priority, demand);
+
+        // Create event
+        ArrayList<EnergyNode> nodes = new ArrayList<>();
+        nodes.add(newConsumer);
+        return new Event(
+                EventType.CONSUMER_ADDED,
+                nodes,
+                "New consumer added with priority " + priority + " and demand " + String.format("%.2f", demand),
                 System.currentTimeMillis()
         );
     }

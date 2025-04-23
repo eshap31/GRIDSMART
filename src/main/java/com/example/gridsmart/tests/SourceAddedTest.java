@@ -7,12 +7,9 @@ import com.example.gridsmart.events.EventType;
 import com.example.gridsmart.graph.EnergyAllocationManager;
 import com.example.gridsmart.graph.Graph;
 import com.example.gridsmart.model.EnergyConsumer;
-import com.example.gridsmart.model.EnergyNode;
 import com.example.gridsmart.model.EnergySource;
 import com.example.gridsmart.model.SourceType;
 import com.example.gridsmart.model.NodeType;
-
-import java.util.Map;
 
 public class SourceAddedTest {
     public static void main(String[] args) {

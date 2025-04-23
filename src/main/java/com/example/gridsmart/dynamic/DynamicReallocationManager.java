@@ -59,10 +59,10 @@ public class DynamicReallocationManager implements EventHandler{
             case SOURCE_ADDED:
                 handleSourceAdded(event);
                 break;
-        /*case CONSUMER_ADDED:
-            handleConsumerAdded(event);
-            break;
-        case DEMAND_INCREASE:
+            case CONSUMER_ADDED:
+                handleConsumerAdded(event);
+                break;
+        /*case DEMAND_INCREASE:
             handleDemandIncrease(event);
             break;
         case DEMAND_DECREASE:
@@ -209,8 +209,119 @@ public class DynamicReallocationManager implements EventHandler{
     }
 
     private void handleConsumerAdded(Event event) {
-        // STUB implementation
-        System.out.println("Consumer added event received (not implemented yet)");
+        // Get the new consumer from the event
+        List<EnergyNode> nodes = event.getNodes();
+        if (nodes.isEmpty() || !(nodes.get(0) instanceof EnergyConsumer)) {
+            System.out.println("!!! invalid consumer added event: no consumer node provided !!!");
+            return;
+        }
+
+        EnergyConsumer newConsumer = (EnergyConsumer) nodes.getFirst();
+        System.out.println("Processing new consumer addition: " + newConsumer.getId() +
+                " (Priority " + newConsumer.getPriority() +
+                ") with demand " + newConsumer.getDemand());
+
+        // Add the consumer to the graph
+        graph.addNode(newConsumer);
+
+        // Create connections from all sources to this consumer
+        for (EnergyNode node : graph.getNodesByType(NodeType.SOURCE)) {
+            EnergySource source = (EnergySource) node;
+            if (source.isActive()) {
+                // Create edge with source's capacity
+                graph.addEdge(source.getId(), newConsumer.getId(), source.getCapacity());
+            }
+        }
+
+        // Update the queues
+        sourceQueue.updateFromGraph(graph);
+        consumerQueue.updateFromGraph(graph);
+
+        // Attempt to allocate energy to the new consumer
+        System.out.println("Attempting to allocate energy to new consumer...");
+        double allocated = allocateEnergyToNewConsumer(newConsumer);
+
+        System.out.println("Allocated " + allocated + " energy to new consumer " +
+                newConsumer.getId() + " (demand: " + newConsumer.getDemand() + ")");
+
+        // Check if fully satisfied
+        if (Math.abs(newConsumer.getRemainingDemand()) < 0.001) {
+            System.out.println("Consumer " + newConsumer.getId() + " fully satisfied with available energy");
+        } else {
+            // Consumer not fully satisfied and has high priority, try selective deallocation
+            if (newConsumer.getPriority() <= 2) {
+                System.out.println("High-priority consumer not fully satisfied. Attempting selective deallocation...");
+                double deallocated = selectiveDeallocator.deallocateEnergy(newConsumer, newConsumer.getRemainingDemand());
+
+                if (deallocated > 0) {
+                    // Try to allocate the deallocated energy
+                    System.out.println("Deallocated " + deallocated + " energy. Reallocating to consumer...");
+
+                    // Now use greedyReallocator to allocate the deallocated energy
+                    double additionalAllocated = allocateEnergyToNewConsumer(newConsumer);
+
+                    System.out.println("Additional " + additionalAllocated +
+                            " energy allocated after deallocation");
+
+                    allocated += additionalAllocated;
+                } else {
+                    System.out.println("No energy could be deallocated from lower priority consumers");
+                }
+            } else {
+                System.out.println("Lower-priority consumer not fully satisfied, but selective deallocation not attempted");
+            }
+        }
+
+        double fulfillmentPercentage = 0;
+        if (newConsumer.getDemand() > 0) {
+            fulfillmentPercentage = (allocated / newConsumer.getDemand()) * 100;
+        }
+
+        System.out.println("Final allocation for new consumer: " + allocated + "/" +
+                newConsumer.getDemand() + " (" + String.format("%.1f", fulfillmentPercentage) + "%)");
+
+        // Print the new allocation status
+        printAllocationStatus();
+    }
+
+    // Helper method to allocate available energy to the new consumer
+    private double allocateEnergyToNewConsumer(EnergyConsumer consumer) {
+        double totalAllocated = 0;
+        double remainingDemand = consumer.getRemainingDemand();
+
+        if (remainingDemand <= 0) {
+            return 0; // No allocation needed
+        }
+
+        // Create a temporary queue with all available sources
+        EnergySourceQueue tempQueue = new EnergySourceQueue();
+        for (EnergyNode node : graph.getNodesByType(NodeType.SOURCE)) {
+            EnergySource source = (EnergySource) node;
+            if (source.isActive() && source.getAvailableEnergy() > 0) {
+                tempQueue.add(source);
+            }
+        }
+
+        // Allocate energy from each source until demand is met or no more sources available
+        while (!tempQueue.isEmpty() && remainingDemand > 0) {
+            EnergySource source = tempQueue.pollHighestEnergySource();
+            double availableEnergy = source.getAvailableEnergy();
+
+            if (availableEnergy > 0) {
+                double allocateAmount = Math.min(availableEnergy, remainingDemand);
+
+                System.out.println("  Allocating " + allocateAmount + " energy from source " +
+                        source.getId() + " to consumer " + consumer.getId());
+
+                // Update allocation in the allocation manager
+                allocationManager.addAllocation(consumer, source, allocateAmount);
+
+                totalAllocated += allocateAmount;
+                remainingDemand -= allocateAmount;
+            }
+        }
+
+        return totalAllocated;
     }
 
     private void handleDemandIncrease(Event event) {
