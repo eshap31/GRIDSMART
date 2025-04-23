@@ -6,6 +6,7 @@ import com.example.gridsmart.model.*;
 import com.example.gridsmart.util.*;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -26,6 +27,9 @@ public class DynamicReallocationManager implements EventHandler{
     private int eventsProcessed = 0;
     private int successfulReallocations = 0;
 
+    // Define a map at class level
+    private final Map<EventType, EventHandlerStrategy> eventHandlers = new HashMap<>();
+
     // Update constructor
     public DynamicReallocationManager(Graph graph, EnergyAllocationManager allocationManager) {
         this.graph = graph;
@@ -43,6 +47,17 @@ public class DynamicReallocationManager implements EventHandler{
         // Pass selective deallocator to greedy reallocator
         this.greedyReallocator = new GreedyReallocator(
                 allocationManager, consumerQueue, sourceQueue, selectiveDeallocator);
+
+        // Set up event handlers
+        eventHandlers.put(EventType.SOURCE_FAILURE, this::handleSourceFailure);
+        eventHandlers.put(EventType.SOURCE_ADDED, this::handleSourceAdded);
+        eventHandlers.put(EventType.CONSUMER_ADDED, this::handleConsumerAdded);
+    }
+
+    // Define a functional interface for the handlers
+    @FunctionalInterface
+    private interface EventHandlerStrategy {
+        void handle(Event event);
     }
 
     @Override
@@ -50,27 +65,10 @@ public class DynamicReallocationManager implements EventHandler{
         System.out.println("Received event: " + event.getType() + " - " + event.getEventDescription());
         eventsProcessed++;
 
-        // dispatch to correct handler
-        // based on the event type
-        switch(event.getType()) {
-            case SOURCE_FAILURE:
-                handleSourceFailure(event);
-                break;
-            case SOURCE_ADDED:
-                handleSourceAdded(event);
-                break;
-            case CONSUMER_ADDED:
-                handleConsumerAdded(event);
-                break;
-        /*case DEMAND_INCREASE:
-            handleDemandIncrease(event);
-            break;
-        case DEMAND_DECREASE:
-            handleDemandDecrease(event);
-            break;*/
-            default:
-                System.out.println("WARNING: Unknown event type: " + event.getType());
-        }
+        EventHandlerStrategy handler = eventHandlers.getOrDefault(event.getType(),
+                e -> System.out.println("WARNING: Unknown event type: " + e.getType()));
+        handler.handle(event);
+
         event.setHandled(true);
     }
 

@@ -4,6 +4,7 @@ import com.example.gridsmart.graph.Graph;
 import com.example.gridsmart.model.*;
 
 import java.util.*;
+import java.util.function.Supplier;
 
 public class EventSimulator {
     private final long frequency; // the frequency of events
@@ -23,11 +24,19 @@ public class EventSimulator {
     private static final double MAX_CONSUMER_DEMAND = 800;
     private static final double DEMAND_CHANGE_PERCENTAGE = 0.3; // 30% increase/decrease
 
+    // map to associate event types with their event creation methods
+    private final Map<EventType, Supplier<Event>> eventFactories = new HashMap<>();
+
     public EventSimulator(long frequency, Graph graph) {
         this.frequency = frequency;
         this.random = new Random();
         this.graph = graph;
         this.isRunning = false;
+
+        // Set up event factories
+        eventFactories.put(EventType.SOURCE_FAILURE, this::createSourceFailureEvent);
+        eventFactories.put(EventType.SOURCE_ADDED, this::createSourceAddedEvent);
+        eventFactories.put(EventType.CONSUMER_ADDED, this::createConsumerAddedEvent);
     }
 
     public void setEventHandler(EventHandler eventHandler) {
@@ -96,22 +105,12 @@ public class EventSimulator {
 
     // create an event base on the type
     public Event createEvent(EventType type) {
-        switch(type) {
-            case SOURCE_FAILURE:
-                return createSourceFailureEvent();
-            case SOURCE_ADDED:
-                return createSourceAddedEvent();
-            case CONSUMER_ADDED:
-                return createConsumerAddedEvent();
-        /*
-        case DEMAND_INCREASE:
-            return createDemandIncreaseEvent();
-        case DEMAND_DECREASE:
-            return createDemandDecreaseEvent();
-         */
-            default:
-                System.out.println("unknown event type: " + type);
-                return null;
+        Supplier<Event> factory = eventFactories.get(type);
+        if (factory != null) {
+            return factory.get();
+        } else {
+            System.out.println("unknown event type: " + type);
+            return null;
         }
     }
 
