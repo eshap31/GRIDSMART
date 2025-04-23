@@ -17,6 +17,13 @@ public class EventSimulator {
     private boolean isRunning;
     private Timer timer; // the timer that will schedule the events
 
+    // Constants for new source/consumer generation
+    private static final double MIN_SOURCE_CAPACITY = 300;
+    private static final double MAX_SOURCE_CAPACITY = 1200;
+    private static final double MIN_CONSUMER_DEMAND = 200;
+    private static final double MAX_CONSUMER_DEMAND = 800;
+    private static final double DEMAND_CHANGE_PERCENTAGE = 0.3; // 30% increase/decrease
+
     public EventSimulator(long frequency, Graph graph) {
         this.frequency = frequency;
         this.random = new Random();

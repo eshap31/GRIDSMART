@@ -76,8 +76,6 @@ public class DynamicReallocationManager implements EventHandler{
         event.setHandled(true);
     }
 
-    // In DynamicReallocationManager.java, modify the handleSourceFailure method:
-
     private void handleSourceFailure(Event event) {
         // identify the source that failed
         List<EnergyNode> nodes = event.getNodes();
