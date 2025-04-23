@@ -23,7 +23,7 @@ public class MasterController
     private DynamicReallocationManager reallocationManager;
     private EventSimulator eventSimulator;
 
-    private long eventFrequencyMs = 5000; // 5 second in between each event
+    private long eventFrequencyMs = 10000; // 10 second in between each event
 
     public MasterController()
     {
