@@ -1,8 +1,10 @@
 package com.example.gridsmart.events;
 
 import com.example.gridsmart.graph.Graph;
+import com.example.gridsmart.model.SourceType;
 import com.example.gridsmart.model.EnergyNode;
 import com.example.gridsmart.model.NodeType;
+import com.example.gridsmart.model.EnergySource;
 
 import java.util.*;
 
@@ -96,27 +98,26 @@ public class EventSimulator {
     }
 
     // create an event base on the type
-    public Event createEvent(EventType type)
-    {
-        switch(type)
-        {
+    public Event createEvent(EventType type) {
+        switch(type) {
             case SOURCE_FAILURE:
                 return createSourceFailureEvent();
-            /*
             case SOURCE_ADDED:
                 return createSourceAddedEvent();
-            case CONSUMER_ADDED:
-                return createConsumerAddedEvent();
-            case DEMAND_INCREASE:
-                return createDemandIncreaseEvent();
-            case DEMAND_DECREASE:
-                return createDemandDecreaseEvent();
-             */
+        /*
+        case CONSUMER_ADDED:
+            return createConsumerAddedEvent();
+        case DEMAND_INCREASE:
+            return createDemandIncreaseEvent();
+        case DEMAND_DECREASE:
+            return createDemandDecreaseEvent();
+         */
             default:
                 System.out.println("unknown event type: " + type);
                 return null;
         }
     }
+
 
     // create a source failure event
     // by choosing a random source
@@ -138,6 +139,33 @@ public class EventSimulator {
                 EventType.SOURCE_FAILURE,
                 nodes,
                 "Source " + source.getId() + " has failed",
+                System.currentTimeMillis()
+        );
+    }
+
+    // create a source added event
+    // by generating a random source
+    private Event createSourceAddedEvent() {
+        // Generate a unique ID for the new source
+        String sourceId = "source_" + System.currentTimeMillis();
+
+        // Generate random capacity between 200 and 1000
+        double capacity = 200 + random.nextDouble() * 800;
+
+        // Select a random source type
+        SourceType[] sourceTypes = SourceType.values();
+        SourceType sourceType = sourceTypes[random.nextInt(sourceTypes.length)];
+
+        // Create the new source
+        EnergySource newSource = new EnergySource(sourceId, capacity, sourceType);
+
+        // Create event
+        ArrayList<EnergyNode> nodes = new ArrayList<>();
+        nodes.add(newSource);
+        return new Event(
+                EventType.SOURCE_ADDED,
+                nodes,
+                "New " + sourceType + " source added with " + String.format("%.2f", capacity) + " capacity",
                 System.currentTimeMillis()
         );
     }

@@ -46,30 +46,28 @@ public class DynamicReallocationManager implements EventHandler{
     }
 
     @Override
-    public void handleEvent(Event event)
-    {
+    public void handleEvent(Event event) {
         System.out.println("Received event: " + event.getType() + " - " + event.getEventDescription());
         eventsProcessed++;
 
         // dispatch to correct handler
         // based on the event type
-        switch(event.getType())
-        {
+        switch(event.getType()) {
             case SOURCE_FAILURE:
                 handleSourceFailure(event);
                 break;
-            /*case SOURCE_ADDED:
+            case SOURCE_ADDED:
                 handleSourceAdded(event);
                 break;
-            case CONSUMER_ADDED:
-                handleConsumerAdded(event);
-                break;
-            case DEMAND_INCREASE:
-                handleDemandIncrease(event);
-                break;
-            case DEMAND_DECREASE:
-                handleDemandDecrease(event);
-                break;*/
+        /*case CONSUMER_ADDED:
+            handleConsumerAdded(event);
+            break;
+        case DEMAND_INCREASE:
+            handleDemandIncrease(event);
+            break;
+        case DEMAND_DECREASE:
+            handleDemandDecrease(event);
+            break;*/
             default:
                 System.out.println("WARNING: Unknown event type: " + event.getType());
         }
@@ -158,8 +156,56 @@ public class DynamicReallocationManager implements EventHandler{
     }
 
     private void handleSourceAdded(Event event) {
-        // STUB implementation
-        System.out.println("Source added event received (not implemented yet)");
+        // Get the new source from the event
+        List<EnergyNode> nodes = event.getNodes();
+        if (nodes.isEmpty() || !(nodes.get(0) instanceof EnergySource)) {
+            System.out.println("!!! invalid source added event: no source node provided !!!");
+            return;
+        }
+
+        EnergySource newSource = (EnergySource) nodes.getFirst();
+        System.out.println("Processing new source addition: " + newSource.getId() +
+                " (" + newSource.getType() + ") with capacity " + newSource.getCapacity());
+
+        // Add the source to the graph
+        graph.addNode(newSource);
+
+        // Create connections to all consumers
+        // This allows the source to potentially provide energy to any consumer
+        for (EnergyNode node : graph.getNodesByType(NodeType.CONSUMER)) {
+            EnergyConsumer consumer = (EnergyConsumer) node;
+            graph.addEdge(newSource.getId(), consumer.getId(), newSource.getCapacity());
+        }
+
+        // Update the queues
+        sourceQueue.updateFromGraph(graph);
+        consumerQueue.updateFromGraph(graph);
+
+        // Identify consumers that could benefit from more energy
+        List<EnergyConsumer> unsatisfiedConsumers = new ArrayList<>();
+        for (EnergyNode node : graph.getNodesByType(NodeType.CONSUMER)) {
+            EnergyConsumer consumer = (EnergyConsumer) node;
+            if (consumer.getRemainingDemand() > 0) {
+                unsatisfiedConsumers.add(consumer);
+            }
+        }
+
+        System.out.println("Found " + unsatisfiedConsumers.size() +
+                " consumers with unmet demand that could benefit from the new source");
+
+        // Use the greedy reallocator to allocate energy from the new source
+        if (!unsatisfiedConsumers.isEmpty()) {
+            System.out.println("Executing greedy reallocation for consumers with unmet demand");
+            int satisfiedConsumers = greedyReallocator.reallocate(unsatisfiedConsumers);
+
+            System.out.println("Reallocation complete. " + satisfiedConsumers +
+                    " out of " + unsatisfiedConsumers.size() + " consumers fully satisfied");
+        } else {
+            System.out.println("All consumers are already fully satisfied - no reallocation needed");
+        }
+
+        // Print the new allocation status
+        printAllocationStatus();
     }
 
     private void handleConsumerAdded(Event event) {
@@ -177,7 +223,9 @@ public class DynamicReallocationManager implements EventHandler{
         System.out.println("Demand decrease event received (not implemented yet)");
     }
 
-    // functions that will be implemented in next sprint
+// ___________________________________________________________________________________________________
+// ___________________________________________________________________________________________________
+// ___________________________________________________________________________________________________
 
     /**
      * Determines which reallocation strategy to use based on the event.
