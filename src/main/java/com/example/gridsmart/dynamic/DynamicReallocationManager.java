@@ -30,7 +30,7 @@ public class DynamicReallocationManager implements EventHandler{
     // Define a map at class level
     private final Map<EventType, EventHandlerStrategy> eventHandlers = new HashMap<>();
 
-    // Update constructor
+    // Update the constructor to register the new event handlers
     public DynamicReallocationManager(Graph graph, EnergyAllocationManager allocationManager) {
         this.graph = graph;
         this.allocationManager = allocationManager;
@@ -52,6 +52,8 @@ public class DynamicReallocationManager implements EventHandler{
         eventHandlers.put(EventType.SOURCE_FAILURE, this::handleSourceFailure);
         eventHandlers.put(EventType.SOURCE_ADDED, this::handleSourceAdded);
         eventHandlers.put(EventType.CONSUMER_ADDED, this::handleConsumerAdded);
+        eventHandlers.put(EventType.DEMAND_INCREASE, this::handleDemandIncrease);
+        eventHandlers.put(EventType.DEMAND_DECREASE, this::handleDemandDecrease);
     }
 
     // Define a functional interface for the handlers
@@ -322,14 +324,187 @@ public class DynamicReallocationManager implements EventHandler{
         return totalAllocated;
     }
 
+    // Implement handleDemandIncrease method
     private void handleDemandIncrease(Event event) {
-        // STUB implementation
-        System.out.println("Demand increase event received (not implemented yet)");
+        // Get the consumer from the event
+        List<EnergyNode> nodes = event.getNodes();
+        if (nodes.isEmpty() || !(nodes.get(0) instanceof EnergyConsumer)) {
+            System.out.println("!!! invalid demand increase event: no consumer node provided !!!");
+            return;
+        }
+
+        EnergyConsumer consumer = (EnergyConsumer) nodes.getFirst();
+        String consumerId = consumer.getId();
+
+        // Find the consumer in the graph (we need the actual instance in the graph)
+        EnergyNode graphNode = graph.getNode(consumerId);
+        if (graphNode == null || !(graphNode instanceof EnergyConsumer)) {
+            System.out.println("!!! Consumer " + consumerId + " not found in graph !!!");
+            return;
+        }
+
+        EnergyConsumer graphConsumer = (EnergyConsumer) graphNode;
+        double oldDemand = graphConsumer.getDemand();
+        double newDemand = consumer.getDemand();
+
+        // Set the new demand on the actual consumer in the graph
+        graphConsumer.setDemand(newDemand);
+
+        System.out.println("Processing demand increase for consumer " + consumerId +
+                " from " + oldDemand + " to " + newDemand);
+
+        // Calculate additional energy needed
+        double additionalEnergyNeeded = newDemand - oldDemand;
+        double currentlyAllocated = graphConsumer.getAllocatedEnergy();
+
+        System.out.println("Current allocation: " + currentlyAllocated +
+                ", Additional energy needed: " + additionalEnergyNeeded);
+
+        if (additionalEnergyNeeded <= 0) {
+            System.out.println("No additional energy needed, demand unchanged or decreased");
+            return;
+        }
+
+        // Try to allocate more energy to this consumer
+        List<EnergyConsumer> consumerList = new ArrayList<>();
+        consumerList.add(graphConsumer);
+
+        // Update the queues
+        consumerQueue.updateFromGraph(graph);
+        sourceQueue.updateFromGraph(graph);
+
+        // First try greedy allocation from available sources
+        System.out.println("Attempting to allocate additional energy from available sources...");
+        int satisfiedConsumers = greedyReallocator.reallocate(consumerList);
+
+        // Check if the consumer still needs more energy and if it's high priority
+        if (graphConsumer.getRemainingDemand() > 0 && graphConsumer.getPriority() <= 2) {
+            System.out.println("High-priority consumer still needs energy. Attempting selective deallocation...");
+            double deallocated = selectiveDeallocator.deallocateEnergy(
+                    graphConsumer, graphConsumer.getRemainingDemand());
+
+            if (deallocated > 0) {
+                System.out.println("Deallocated " + deallocated + " energy. Attempting reallocation...");
+                satisfiedConsumers = greedyReallocator.reallocate(consumerList);
+            }
+        }
+
+        // Print final allocation status
+        double finalAllocated = graphConsumer.getAllocatedEnergy();
+        double finalRemaining = graphConsumer.getRemainingDemand();
+        double fulfillmentPercentage = (newDemand > 0) ?
+                (finalAllocated / newDemand) * 100 : 100;
+
+        System.out.println("Final allocation for " + consumerId + ": " +
+                finalAllocated + "/" + newDemand + " (" +
+                String.format("%.1f", fulfillmentPercentage) + "%)");
+
+        if (finalRemaining > 0) {
+            System.out.println("Consumer " + consumerId + " still has unmet demand: " + finalRemaining);
+        } else {
+            System.out.println("Consumer " + consumerId + " demand fully satisfied");
+        }
+
+        // Print updated allocation status
+        printAllocationStatus();
     }
 
+    // Implement handleDemandDecrease method
     private void handleDemandDecrease(Event event) {
-        // STUB implementation
-        System.out.println("Demand decrease event received (not implemented yet)");
+        // Get the consumer from the event
+        List<EnergyNode> nodes = event.getNodes();
+        if (nodes.isEmpty() || !(nodes.get(0) instanceof EnergyConsumer)) {
+            System.out.println("!!! invalid demand decrease event: no consumer node provided !!!");
+            return;
+        }
+
+        EnergyConsumer consumer = (EnergyConsumer) nodes.getFirst();
+        String consumerId = consumer.getId();
+
+        // Find the consumer in the graph (we need the actual instance in the graph)
+        EnergyNode graphNode = graph.getNode(consumerId);
+        if (graphNode == null || !(graphNode instanceof EnergyConsumer)) {
+            System.out.println("!!! Consumer " + consumerId + " not found in graph !!!");
+            return;
+        }
+
+        EnergyConsumer graphConsumer = (EnergyConsumer) graphNode;
+        double oldDemand = graphConsumer.getDemand();
+        double newDemand = consumer.getDemand();
+        double currentlyAllocated = graphConsumer.getAllocatedEnergy();
+
+        System.out.println("Processing demand decrease for consumer " + consumerId +
+                " from " + oldDemand + " to " + newDemand);
+        System.out.println("Current allocation: " + currentlyAllocated);
+
+        // Set the new demand on the actual consumer in the graph
+        graphConsumer.setDemand(newDemand);
+
+        // Check if current allocation exceeds new demand
+        if (currentlyAllocated > newDemand) {
+            double excessEnergy = currentlyAllocated - newDemand;
+            System.out.println("Consumer has " + excessEnergy + " excess energy allocation");
+
+            // Free up the excess energy by reducing allocations
+            Map<EnergySource, Allocation> allocations =
+                    allocationManager.getAllocationsForConsumer(graphConsumer);
+
+            double energyToFree = excessEnergy;
+            for (Map.Entry<EnergySource, Allocation> entry : allocations.entrySet()) {
+                if (energyToFree > 0) {
+                    EnergySource source = entry.getKey();
+                    Allocation allocation = entry.getValue();
+                    double currentAllocation = allocation.getAllocatedEnergy();
+
+                    double reductionAmount = Math.min(currentAllocation, energyToFree);
+                    if (reductionAmount > 0) {
+                        double newAllocation = currentAllocation - reductionAmount;
+
+                        System.out.println("Reducing allocation from " + source.getId() +
+                                " by " + reductionAmount + " (from " + currentAllocation +
+                                " to " + newAllocation + ")");
+
+                        // Update allocation
+                        allocationManager.updateAllocation(graphConsumer, source, newAllocation);
+                        energyToFree -= reductionAmount;
+                    }
+                }
+            }
+
+            System.out.println("Freed up " + (excessEnergy - energyToFree) +
+                    " energy from consumer " + consumerId);
+
+            // Find consumers with unmet demand to reallocate the freed energy
+            List<EnergyConsumer> unsatisfiedConsumers = new ArrayList<>();
+            for (EnergyNode node : graph.getNodesByType(NodeType.CONSUMER)) {
+                if (node instanceof EnergyConsumer) {
+                    EnergyConsumer potentialConsumer = (EnergyConsumer) node;
+                    if (potentialConsumer.getRemainingDemand() > 0) {
+                        unsatisfiedConsumers.add(potentialConsumer);
+                    }
+                }
+            }
+
+            // Update the queues
+            consumerQueue.updateFromGraph(graph);
+            sourceQueue.updateFromGraph(graph);
+
+            // Reallocate freed energy to other consumers
+            if (!unsatisfiedConsumers.isEmpty()) {
+                System.out.println("Attempting to reallocate freed energy to " +
+                        unsatisfiedConsumers.size() + " consumers with unmet demand");
+                int satisfiedConsumers = greedyReallocator.reallocate(unsatisfiedConsumers);
+                System.out.println(satisfiedConsumers + " consumers fully satisfied after reallocation");
+            } else {
+                System.out.println("No consumers with unmet demand found for reallocation");
+            }
+        } else {
+            System.out.println("Current allocation (" + currentlyAllocated +
+                    ") doesn't exceed new demand (" + newDemand + "). No adjustment needed.");
+        }
+
+        // Print updated allocation status
+        printAllocationStatus();
     }
 
 // ___________________________________________________________________________________________________

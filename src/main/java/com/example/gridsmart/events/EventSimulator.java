@@ -37,6 +37,8 @@ public class EventSimulator {
         eventFactories.put(EventType.SOURCE_FAILURE, this::createSourceFailureEvent);
         eventFactories.put(EventType.SOURCE_ADDED, this::createSourceAddedEvent);
         eventFactories.put(EventType.CONSUMER_ADDED, this::createConsumerAddedEvent);
+        eventFactories.put(EventType.DEMAND_INCREASE, this::createDemandIncreaseEvent);
+        eventFactories.put(EventType.DEMAND_DECREASE, this::createDemandDecreaseEvent);
     }
 
     public void setEventHandler(EventHandler eventHandler) {
@@ -186,6 +188,81 @@ public class EventSimulator {
                 EventType.CONSUMER_ADDED,
                 nodes,
                 "New consumer added with priority " + priority + " and demand " + String.format("%.2f", demand),
+                System.currentTimeMillis()
+        );
+    }
+
+    // Add method to create a demand increase event
+    private Event createDemandIncreaseEvent() {
+        // Get all the consumers in the graph
+        List<EnergyNode> consumers = graph.getNodesByType(NodeType.CONSUMER);
+        if (consumers.isEmpty()) {
+            System.out.println("No consumers to increase demand");
+            return null;
+        }
+
+        // Select a random consumer
+        EnergyNode node = consumers.get(random.nextInt(consumers.size()));
+        EnergyConsumer consumer = (EnergyConsumer) node;
+
+        // Increase demand by a percentage (20-50%)
+        double currentDemand = consumer.getDemand();
+        double increasePercentage = 0.2 + (random.nextDouble() * 0.3); // 20-50%
+        double demandIncrease = currentDemand * increasePercentage;
+        double newDemand = currentDemand + demandIncrease;
+
+        // Update the consumer with new demand
+        consumer.setDemand(newDemand);
+
+        // Create event
+        ArrayList<EnergyNode> nodes = new ArrayList<>();
+        nodes.add(consumer);
+        return new Event(
+                EventType.DEMAND_INCREASE,
+                nodes,
+                "Demand increased for " + consumer.getId() + " from " +
+                        String.format("%.2f", currentDemand) + " to " +
+                        String.format("%.2f", newDemand) + " (+" +
+                        String.format("%.1f", increasePercentage * 100) + "%)",
+                System.currentTimeMillis()
+        );
+    }
+
+    // Add method to create a demand decrease event
+    private Event createDemandDecreaseEvent() {
+        // Get all the consumers in the graph
+        List<EnergyNode> consumers = graph.getNodesByType(NodeType.CONSUMER);
+        if (consumers.isEmpty()) {
+            System.out.println("No consumers to decrease demand");
+            return null;
+        }
+
+        // Select a random consumer
+        EnergyNode node = consumers.get(random.nextInt(consumers.size()));
+        EnergyConsumer consumer = (EnergyConsumer) node;
+
+        // Decrease demand by a percentage (10-30%)
+        double currentDemand = consumer.getDemand();
+        double decreasePercentage = 0.1 + (random.nextDouble() * 0.2); // 10-30%
+        double demandDecrease = currentDemand * decreasePercentage;
+        double newDemand = currentDemand - demandDecrease;
+
+        // Ensure new demand is not negative
+        newDemand = Math.max(0, newDemand);
+
+        // Update the consumer with new demand
+        consumer.setDemand(newDemand);
+
+        // Create event
+        ArrayList<EnergyNode> nodes = new ArrayList<>();
+        nodes.add(consumer);
+        return new Event(
+                EventType.DEMAND_DECREASE,
+                nodes,
+                "Demand decreased for " + consumer.getId() + " from " +
+                        String.format("%.2f", currentDemand) + " to " +
+                        String.format("%.2f", newDemand) + " (-" +
+                        String.format("%.1f", decreasePercentage * 100) + "%)",
                 System.currentTimeMillis()
         );
     }
