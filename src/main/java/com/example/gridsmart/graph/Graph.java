@@ -92,10 +92,12 @@ public class Graph {
 
         // Find the edge to remove
         GraphEdge edgeToRemove = null;
+        boolean found = false;
+
         for (GraphEdge edge : outEdges) {
-            if (edge.getTarget().getId().equals(targetId)) {
+            if (!found && edge.getTarget().getId().equals(targetId)) {
                 edgeToRemove = edge;
-                break;
+                found = true;
             }
         }
 
@@ -458,27 +460,25 @@ public class Graph {
                 EnergyNode target = edge.getTarget();
                 String targetId = target.getId();
 
-                // Skip if already visited or no residual capacity
-                if (visited.contains(targetId) || edge.getResidualCapacity() <= 0) {
-                    continue;
+                // Only process if not visited and has residual capacity
+                if (!visited.contains(targetId) && edge.getResidualCapacity() > 0) {
+                    // Store the parent edge for this node
+                    parentEdges.put(targetId, edge);
+                    System.out.println("Added to path: " + current.getId() + " -> " + targetId +
+                            " (capacity: " + edge.getCapacity() +
+                            ", flow: " + edge.getFlow() +
+                            ", residual: " + edge.getResidualCapacity() + ")");
+
+                    // If we've reached the superSink, we found a path
+                    if (targetId.equals(superSink.getId())) {
+                        System.out.println("Found path to sink!");
+                        return true;
+                    }
+
+                    // Mark as visited and add to queue
+                    visited.add(targetId);
+                    queue.add(target);
                 }
-
-                // Store the parent edge for this node
-                parentEdges.put(targetId, edge);
-                System.out.println("Added to path: " + current.getId() + " -> " + targetId +
-                        " (capacity: " + edge.getCapacity() +
-                        ", flow: " + edge.getFlow() +
-                        ", residual: " + edge.getResidualCapacity() + ")");
-
-                // If we've reached the superSink, we found a path
-                if (targetId.equals(superSink.getId())) {
-                    System.out.println("Found path to sink!");
-                    return true;
-                }
-
-                // Mark as visited and add to queue
-                visited.add(targetId);
-                queue.add(target);
             }
         }
 

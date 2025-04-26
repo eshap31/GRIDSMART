@@ -185,10 +185,12 @@ public class GlobalAllocationAlgorithm
                         if (flow > 0) {
                             // Find the EnergySource object
                             EnergySource source = null;
+                            boolean found = false;
+
                             for (EnergySource s : sources) {
-                                if (s.getId().equals(sourceId)) {
+                                if (!found && s.getId().equals(sourceId)) {
                                     source = s;
-                                    break;
+                                    found = true;
                                 }
                             }
 
@@ -465,24 +467,22 @@ public class GlobalAllocationAlgorithm
         for (EnergyNode node : sortedNodes) {
             List<GraphEdge> edges = graph.getOutgoingEdges(node.getId());
 
-            // Skip nodes with no outgoing edges
-            if (edges.isEmpty()) {
-                continue;
-            }
+            // Only process nodes with outgoing edges
+            if (!edges.isEmpty()) {
+                // Sort edges by target ID
+                edges.sort((a, b) -> a.getTarget().getId().compareTo(b.getTarget().getId()));
 
-            // Sort edges by target ID
-            edges.sort((a, b) -> a.getTarget().getId().compareTo(b.getTarget().getId()));
+                // Print each edge
+                for (GraphEdge edge : edges) {
+                    System.out.printf("%-15s %-15s %10.2f %10.2f%n",
+                            edge.getSource().getId(),
+                            edge.getTarget().getId(),
+                            edge.getFlow(),
+                            edge.getCapacity());
 
-            // Print each edge
-            for (GraphEdge edge : edges) {
-                System.out.printf("%-15s %-15s %10.2f %10.2f%n",
-                        edge.getSource().getId(),
-                        edge.getTarget().getId(),
-                        edge.getFlow(),
-                        edge.getCapacity());
-
-                edgeCount++;
-                totalFlow += edge.getFlow();
+                    edgeCount++;
+                    totalFlow += edge.getFlow();
+                }
             }
         }
 
