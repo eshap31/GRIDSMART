@@ -1,5 +1,4 @@
 package com.example.gridsmart.ui;
-
 import com.example.gridsmart.graph.Allocation;
 import com.example.gridsmart.graph.EnergyAllocationManager;
 import com.example.gridsmart.graph.Graph;
@@ -8,12 +7,14 @@ import com.example.gridsmart.model.EnergySource;
 import com.example.gridsmart.model.SourceType;
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Group;
 import javafx.scene.Scene;
-import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
+import javafx.scene.control.*;
+import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
@@ -47,6 +48,10 @@ public class DirectVisualizationApp extends Application {
     private final Group gridGroup = new Group();
     private final VBox eventLogContainer = new VBox(10);
     private final ScrollPane scrollPane = new ScrollPane(gridGroup);
+
+    // Table view for allocations
+    private TableView<AllocationRow> allocationTable;
+    private ObservableList<AllocationRow> allocationData = FXCollections.observableArrayList();
 
     // Data models
     private EnergyAllocationManager allocationManager;
@@ -82,12 +87,26 @@ public class DirectVisualizationApp extends Application {
         VBox.setVgrow(eventLogContainer, Priority.ALWAYS);
         eventBox.setPrefHeight(150);
 
+        // Create allocation table
+        VBox allocationTableContainer = createAllocationTable();
+
+        // Create a split pane for right side (allocation table and event log)
+        VBox rightPanel = new VBox(10);
+        rightPanel.getChildren().addAll(allocationTableContainer, eventBox);
+        rightPanel.setPrefWidth(600);  // Increased from 400 to 600
+        rightPanel.setMinWidth(550);  // Set minimum width
+        rightPanel.setPadding(new Insets(10));
+
+        // Create a horizontal split pane for main content
+        HBox mainContent = new HBox(10);
+        HBox.setHgrow(scrollPane, Priority.ALWAYS);
+        mainContent.getChildren().addAll(scrollPane, rightPanel);
+
         // Set up the main layout
-        root.setCenter(scrollPane);
-        root.setBottom(eventBox);
+        root.setCenter(mainContent);
 
         // Create a scene with the grid view
-        Scene scene = new Scene(root, 900, 700);
+        Scene scene = new Scene(root, 1500, 800);  // Increased from 1300x700 to 1500x800
 
         // Configure the main stage
         primaryStage.setTitle("GridSmart Energy Allocation System");
@@ -101,6 +120,111 @@ public class DirectVisualizationApp extends Application {
         } else {
             logEvent("Waiting for system initialization...");
         }
+    }
+
+    /**
+     * Creates the allocation table component
+     */
+    private VBox createAllocationTable() {
+        VBox container = new VBox(5);
+        Label tableTitle = new Label("Allocation Details");
+        tableTitle.setFont(Font.font("System", FontWeight.BOLD, 14));
+
+        // Create the table
+        allocationTable = new TableView<>();
+        allocationTable.setItems(allocationData);
+
+        // Create columns
+        TableColumn<AllocationRow, String> sourceCol = new TableColumn<>("Source");
+        sourceCol.setCellValueFactory(new PropertyValueFactory<>("sourceId"));
+        sourceCol.setPrefWidth(100);  // Increased from 80 to 100
+
+        TableColumn<AllocationRow, String> consumerCol = new TableColumn<>("Consumer");
+        consumerCol.setCellValueFactory(new PropertyValueFactory<>("consumerId"));
+        consumerCol.setPrefWidth(110);  // Increased from 80 to 110
+
+        TableColumn<AllocationRow, Integer> priorityCol = new TableColumn<>("Priority");
+        priorityCol.setCellValueFactory(new PropertyValueFactory<>("priority"));
+        priorityCol.setPrefWidth(70);  // Increased from 60 to 70
+
+        TableColumn<AllocationRow, Double> allocatedCol = new TableColumn<>("Allocated");
+        allocatedCol.setCellValueFactory(new PropertyValueFactory<>("allocatedEnergy"));
+        allocatedCol.setPrefWidth(95);  // Increased from 75 to 95
+
+        TableColumn<AllocationRow, Double> demandCol = new TableColumn<>("Demand");
+        demandCol.setCellValueFactory(new PropertyValueFactory<>("demand"));
+        demandCol.setPrefWidth(95);  // Increased from 75 to 95
+
+        TableColumn<AllocationRow, String> satisfactionCol = new TableColumn<>("Satisfaction");
+        satisfactionCol.setCellValueFactory(new PropertyValueFactory<>("satisfaction"));
+        satisfactionCol.setPrefWidth(100);  // Increased from 85 to 100
+
+        allocationTable.getColumns().addAll(sourceCol, consumerCol, priorityCol,
+                allocatedCol, demandCol, satisfactionCol);
+
+        // Configure table properties
+        allocationTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        allocationTable.setPrefHeight(400);  // Increased from 300 to 400
+
+        container.getChildren().addAll(tableTitle, allocationTable);
+        return container;
+    }
+
+    /**
+     * Updates the allocation table with current data
+     */
+    private void updateAllocationTable() {
+        allocationData.clear();
+
+        if (allocationManager == null) {
+            return;
+        }
+
+        // Iterate through all consumers and their allocations
+        for (EnergyConsumer consumer : allocationManager.getAllConsumers().values()) {
+            Map<EnergySource, Allocation> allocations =
+                    allocationManager.getAllocationsForConsumer(consumer);
+
+            if (allocations.isEmpty()) {
+                // Add a row showing consumer has no allocations
+                allocationData.add(new AllocationRow(
+                        "-",
+                        consumer.getId(),
+                        consumer.getPriority(),
+                        0.0,
+                        consumer.getDemand(),
+                        "0.0%"
+                ));
+            } else {
+                // Add a row for each allocation
+                for (Map.Entry<EnergySource, Allocation> entry : allocations.entrySet()) {
+                    EnergySource source = entry.getKey();
+                    Allocation allocation = entry.getValue();
+
+                    double allocated = allocation.getAllocatedEnergy();
+                    double demand = consumer.getDemand();
+                    double satisfaction = demand > 0 ? (allocated / demand) * 100 : 0;
+
+                    allocationData.add(new AllocationRow(
+                            source.getId(),
+                            consumer.getId(),
+                            consumer.getPriority(),
+                            allocated,
+                            demand,
+                            String.format("%.1f%%", satisfaction)
+                    ));
+                }
+            }
+        }
+
+        // Sort by priority, then by consumer ID
+        allocationData.sort((a, b) -> {
+            int priorityCompare = Integer.compare(a.getPriority(), b.getPriority());
+            if (priorityCompare != 0) {
+                return priorityCompare;
+            }
+            return a.getConsumerId().compareTo(b.getConsumerId());
+        });
     }
 
     /**
@@ -162,6 +286,9 @@ public class DirectVisualizationApp extends Application {
                     }
                 }
             }
+
+            // Update the allocation table
+            updateAllocationTable();
         } catch (Exception e) {
             System.out.println("Error in updateVisualization: " + e.getMessage());
             e.printStackTrace();
@@ -309,5 +436,35 @@ public class DirectVisualizationApp extends Application {
                 eventLogContainer.getChildren().remove(eventLogContainer.getChildren().size() - 1);
             }
         });
+    }
+
+    /**
+     * Data model class for the allocation table
+     */
+    public static class AllocationRow {
+        private String sourceId;
+        private String consumerId;
+        private int priority;
+        private double allocatedEnergy;
+        private double demand;
+        private String satisfaction;
+
+        public AllocationRow(String sourceId, String consumerId, int priority,
+                             double allocatedEnergy, double demand, String satisfaction) {
+            this.sourceId = sourceId;
+            this.consumerId = consumerId;
+            this.priority = priority;
+            this.allocatedEnergy = allocatedEnergy;
+            this.demand = demand;
+            this.satisfaction = satisfaction;
+        }
+
+        // Getters for property binding
+        public String getSourceId() { return sourceId; }
+        public String getConsumerId() { return consumerId; }
+        public int getPriority() { return priority; }
+        public double getAllocatedEnergy() { return allocatedEnergy; }
+        public double getDemand() { return demand; }
+        public String getSatisfaction() { return satisfaction; }
     }
 }
